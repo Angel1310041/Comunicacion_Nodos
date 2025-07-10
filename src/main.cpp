@@ -3,6 +3,8 @@
 #include <RadioLib.h>
 #include "heltec.h"
 
+
+// Pines LoRa
 #define LORA_MOSI 10
 #define LORA_MISO 11
 #define LORA_SCK 9
@@ -11,11 +13,24 @@
 #define LORA_DIO1 14
 #define LORA_BUSY 13
 
-String Version = "1.1.2.1";
+#define PIN_IO1 2
+#define PIN_IO2 3
+#define PIN_IO3 4
+#define PIN_IO4 5
+#define PIN_IO5 6
+#define PIN_IO6 7
+
+#define UART_RX 46
+#define UART_TX 45
+
+#define I2C_SDA 19
+#define I2C_SCL 20
+
+String Version = "1.1.2.2";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-const int nodeID = 2;  // ⚠️ CAMBIA ESTE VALOR EN CADA PLACA
+const int nodeID = 3;  // ⚠️ CAMBIA ESTE VALOR EN CADA PLACA
 
 void setup() {
   Serial.begin(115200);
