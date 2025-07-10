@@ -29,7 +29,7 @@
 #define MSG_ID_BUFFER_SIZE 16
 
 struct LoRaConfig {
-  int IDLora;
+  char IDLora[4];
   int Canal;
   bool Pantalla;
   bool UART;

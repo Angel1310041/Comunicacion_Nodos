@@ -6,12 +6,13 @@
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-String Version = "1.1.2.4";
+String Version = "1.1.2.5";
 volatile bool receivedFlag = false;
 #define MSG_ID_BUFFER_SIZE 16
 String msgIdBuffer[MSG_ID_BUFFER_SIZE];
 int msgIdBufferIndex = 0;
 
+// Genera un ID de mensaje único usando el IDLora (string) y millis
 String generarMsgID() {
   return String(configLora.IDLora) + "-" + String(millis());
 }
@@ -32,17 +33,13 @@ void setFlag() {
   receivedFlag = true;
 }
 
-void setFlag(void) {
-  receivedFlag = true;
-}
-
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
   cargarConfig();
 
-  if (configLora.IDLora < 0) {
+  if (strlen(configLora.IDLora) == 0) {
     pedirID();
     guardarConfig();
   } else {
@@ -87,22 +84,24 @@ void loop() {
 
     int sep = input.indexOf('|');
     if (sep > 0) {
-      int destino = input.substring(0, sep).toInt();
+      String destino = input.substring(0, sep);
       String mensaje = input.substring(sep + 1);
 
-      if (destino != configLora.IDLora && mensaje.length() > 0) {
-        int siguienteHop = (destino > configLora.IDLora) ? configLora.IDLora + 1 : configLora.IDLora - 1;
+      // Compara destino (string) con configLora.IDLora (char[])
+      if (strcmp(destino.c_str(), configLora.IDLora) != 0 && mensaje.length() > 0) {
+        // Para IDs alfanuméricos, siguienteHop será igual al destino (o puedes implementar lógica de routing avanzada)
+        String siguienteHop = destino;
 
         String msgID = generarMsgID();
 
         String paquete = "ORIG:" + String(configLora.IDLora) +
-                         "|DEST:" + String(destino) +
+                         "|DEST:" + destino +
                          "|MSG:" + mensaje +
-                         "|HOP:" + String(siguienteHop) +
+                         "|HOP:" + siguienteHop +
                          "|CANAL:" + String(configLora.Canal) +
                          "|ID:" + msgID;
 
-        Serial.println("Enviando a HOP:" + String(siguienteHop) + " por canal " + String(configLora.Canal));
+        Serial.println("Enviando a HOP:" + siguienteHop + " por canal " + String(configLora.Canal));
 
         lora.standby();
         int resultado = lora.transmit(paquete);
@@ -161,30 +160,38 @@ void loop() {
         guardarMsgID(msgID);
       }
 
-      int orig = msg.substring(msg.indexOf("ORIG:") + 5, msg.indexOf("|DEST")).toInt();
-      int dest = msg.substring(msg.indexOf("DEST:") + 5, msg.indexOf("|MSG")).toInt();
-      String cuerpo = msg.substring(msg.indexOf("MSG:") + 4, msg.indexOf("|HOP"));
-      int hop = msg.substring(msg.indexOf("HOP:") + 4, idxCanal == -1 ? msg.length() : idxCanal).toInt();
+      // Extraer ORIG, DEST, HOP como string
+      int idxOrig = msg.indexOf("ORIG:");
+      int idxDest = msg.indexOf("|DEST:");
+      int idxMsg = msg.indexOf("|MSG:");
+      int idxHop = msg.indexOf("|HOP:");
 
-      if (configLora.IDLora == dest) {
+      String orig = msg.substring(idxOrig + 5, idxDest);
+      String dest = msg.substring(idxDest + 6, idxMsg);
+      String cuerpo = msg.substring(idxMsg + 5, idxHop);
+      String hop = msg.substring(idxHop + 5, idxCanal == -1 ? msg.length() : idxCanal);
+
+      // Compara si el mensaje es para mí
+      if (strcmp(dest.c_str(), configLora.IDLora) == 0) {
         Serial.println("Mensaje para mí: " + cuerpo);
         digitalWrite(LED_PIN, HIGH); 
         delay(100);
         digitalWrite(LED_PIN, LOW);
-      } else if (configLora.IDLora == hop) {
-        int siguienteHop = (dest > configLora.IDLora) ? configLora.IDLora + 1 : configLora.IDLora - 1;
+      } else if (strcmp(hop.c_str(), configLora.IDLora) == 0) {
+        // Para IDs alfanuméricos, siguienteHop será igual al destino (o puedes implementar lógica de routing avanzada)
+        String siguienteHop = dest;
 
-        String nuevoMsg = "ORIG:" + String(orig) +
-                          "|DEST:" + String(dest) +
+        String nuevoMsg = "ORIG:" + orig +
+                          "|DEST:" + dest +
                           "|MSG:" + cuerpo +
-                          "|HOP:" + String(siguienteHop) +
+                          "|HOP:" + siguienteHop +
                           "|CANAL:" + String(configLora.Canal) +
                           "|ID:" + msgID;
 
         delay(100); 
         lora.standby();
         lora.transmit(nuevoMsg);
-        Serial.println("Reenviado a HOP:" + String(siguienteHop) + " por canal " + String(configLora.Canal));
+        Serial.println("Reenviado a HOP:" + siguienteHop + " por canal " + String(configLora.Canal));
         lora.startReceive();
       } else {
         Serial.println("No es para mí ni me toca reenviar.");

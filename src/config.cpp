@@ -10,14 +10,16 @@ float canales[9] = {
 
 void guardarConfig() {
   preferences.begin("lora", false);
-  preferences.putInt("id", configLora.IDLora);
+  preferences.putString("id", configLora.IDLora); // Guardar como string
   preferences.putInt("canal", configLora.Canal);
   preferences.end();
 }
 
 void cargarConfig() {
   preferences.begin("lora", true);
-  configLora.IDLora = preferences.getInt("id", -1);
+  String id = preferences.getString("id", "");
+  strncpy(configLora.IDLora, id.c_str(), sizeof(configLora.IDLora) - 1);
+  configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0'; // Null-terminate
   configLora.Canal = preferences.getInt("canal", -1);
   preferences.end();
 }
@@ -32,18 +34,18 @@ void borrarConfig() {
 }
 
 void pedirID() {
-  configLora.IDLora = -1;
-  while (configLora.IDLora < 0) {
-    Serial.println("Introduce el ID de este nodo y pulsa ENTER:");
+  configLora.IDLora[0] = '\0'; // Vacía el string
+  while (strlen(configLora.IDLora) == 0) {
+    Serial.println("Introduce el ID de este nodo (hasta 3 caracteres) y pulsa ENTER:");
     while (!Serial.available()) delay(100);
     String input = Serial.readStringUntil('\n');
     input.trim();
-    int tempID = input.toInt();
-    if (tempID > 0) {
-      configLora.IDLora = tempID;
+    if (input.length() > 0 && input.length() < sizeof(configLora.IDLora)) {
+      strncpy(configLora.IDLora, input.c_str(), sizeof(configLora.IDLora) - 1);
+      configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0';
       Serial.println("ID configurado: " + String(configLora.IDLora));
     } else {
-      Serial.println("ID inválido. Debe ser un número mayor que 0.");
+      Serial.println("ID inválido. Debe ser un string de 1 a 3 caracteres.");
     }
     delay(500);
   }
