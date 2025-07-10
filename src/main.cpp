@@ -1,36 +1,28 @@
-#include <Arduino.h>
-#include <SPI.h>
-#include <RadioLib.h>
-#include "heltec.h"
-
-
-// Pines LoRa
-#define LORA_MOSI 10
-#define LORA_MISO 11
-#define LORA_SCK 9
-#define LORA_CS   8
-#define LORA_RST  12
-#define LORA_DIO1 14
-#define LORA_BUSY 13
-
-#define PIN_IO1 2
-#define PIN_IO2 3
-#define PIN_IO3 4
-#define PIN_IO4 5
-#define PIN_IO5 6
-#define PIN_IO6 7
-
-#define UART_RX 46
-#define UART_TX 45
-
-#define I2C_SDA 19
-#define I2C_SCL 20
+#include "config.h"
+#include "hardware.h"
 
 String Version = "1.1.2.2";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
 const int nodeID = 3;  // ⚠️ CAMBIA ESTE VALOR EN CADA PLACA
+
+void imprimirSerial(String mensaje, char color) {
+  String colorCode;
+  switch (color) {
+    case 'r': colorCode = "\033[31m"; break; // Rojo
+    case 'g': colorCode = "\033[32m"; break; // Verde
+    case 'b': colorCode = "\033[34m"; break; // Azul
+    case 'y': colorCode = "\033[33m"; break; // Amarillo
+    case 'c': colorCode = "\033[36m"; break; // Cian
+    case 'm': colorCode = "\033[35m"; break; // Magenta
+    case 'w': colorCode = "\033[37m"; break; // Blanco
+    default: colorCode = "\033[0m"; // Sin color
+  }
+  Serial.print(colorCode);
+  Serial.println(mensaje);
+  Serial.print("\033[0m"); // Resetear color
+}
 
 void setup() {
   Serial.begin(115200);
