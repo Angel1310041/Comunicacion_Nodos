@@ -1,53 +1,107 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Configuración de Pantalla</title>
-<link rel="stylesheet" href="Estilo.css">
-</head>
-<body>
-<div id="perro_uno" class="uno">
-<i id="perro_dos" class="dos"></i>
-<header id="perro_tres" class="tres">
-<h1 id="perro_cuatro" class="cuatro">Configuración de Pantalla</h1>
-</header>
-</div>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Pantalla LoRa</title>
+    <link rel="stylesheet" href="Estilo.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    </head>
+    <body>
+    <div id="perro_uno" class="uno">
+    <i id="perro_dos" class="dos"></i>
+    <header id="perro_tres" class="tres">
+    <h1 id="perro_cuatro" class="cuatro">MI ALARMA</h1>
+    </header>
+    </div>
 
-<aside id="perro_cinco" class="cinco">
-<h2 id="perro_seis" class="seis">Menú</h2>
-<nav id="perro_siete" class="siete">
-<ul>
-<li id="perro_ocho" class="ocho"><a href="#" data-section="inicio">Inicio</a></li>
-<li id="perro_nueve" class="nueve"><a href="#" data-section="pantalla">Pantalla</a></li>
-<li id="perro_diez" class="diez"><a href="#" data-section="salir">Salir</a></li>
-</ul>
-</nav>
-</aside>
+    <aside id="perro_cinco" class="cinco">
+    <h2 id="perro_seis" class="seis">Menú</h2>
+    <nav id="perro_siete" class="siete">
+    <ul>
+    <li id="perro_ocho" class="ocho"><a href="#" data-section="inicio"><i class="fas fa-home menu-icon"></i> Inicio</a></li>
+    <li id="perro_nueve" class="nueve"><a href="#" data-section="pantalla"><i class="fas fa-desktop menu-icon"></i> Pantalla</a></li>
+    <li id="perro_diez" class="diez"><a href="#" data-section="wifi"><i class="fas fa-wifi menu-icon"></i> Configurar WiFi</a></li>
+    <li id="perro_once" class="diez"><a href="#" data-section="salir"><i class="fas fa-sign-out-alt menu-icon"></i> Salir</a></li>
+    </ul>
+    </nav>
+    </aside>
 
-<main id="perro_once" class="once">
-<section id="perro_doce" class="doce active-section">
-<header id="perro_trece" class="trece">
-<h2 id="perro_catorce" class="catorce">Configuración de Pantalla</h2>
-</header>
-<div id="perro_quince" class="quince">
-<h3 id="perro_dieciseis" class="dieciseis">Resumen</h3>
-<p id="perro_diecisiete" class="diecisiete">Pantalla: <span id="perro_dieciocho" class="dieciocho">---</span></p>
-</div>
-</section>
+    <main id="perro_doce" class="once">
+    <section id="perro_trece" class="doce active-section">
+    <header id="perro_catorce" class="trece">
+    <h2 id="perro_quince" class="catorce">Resumen del Sistema</h2>
+    </header>
+    <div id="perro_dieciseis" class="quince">
+    <h3 id="perro_diecisiete" class="dieciseis">Estado Actual</h3>
+    <p id="perro_dieciocho" class="diecisiete">Pantalla: <span id="perro_diecinueve" class="dieciocho">---</span></p>
+    <p id="perro_veinte" class="diecisiete">WiFi: <span id="perro_veintiuno" class="dieciocho">No configurado</span></p>
+    </div>
+    </section>
 
-<section id="perro_diecinueve" class="diecinueve">
-<header id="perro_veinte" class="veinte">
-<h2 id="perro_veintiuno" class="veintiuno">Detalle Pantalla</h2>
-</header>
-<div id="perro_veintidos" class="veintidos">
-<p id="perro_veintitres" class="veintitres">Estado de la pantalla: <span id="perro_veinticuatro" class="veinticuatro">Apagada</span></p>
-<button id="perro_veinticinco" class="veinticinco">Encender</button>
-<button id="perro_veintiseis" class="veintiseis">Apagar</button>
-</div>
-</section>
-</main>
+    <section id="perro_veintidos" class="diecinueve">
+    <header id="perro_veintitres" class="veinte">
+    <h2 id="perro_veinticuatro" class="veintiuno">Control de Pantalla</h2>
+    </header>
+    <div id="perro_veinticinco" class="veintidos">
+    <p id="perro_veintiseis" class="veintitres">Estado de la pantalla: <span id="perro_veintisiete" class="veinticuatro">Apagada</span></p>
+    <button id="perro_veintiocho" class="veinticinco">Encender</button>
+    <button id="perro_veintinueve" class="veintiseis">Apagar</button>
+    </div>
+    </section>
 
-<script src="Script.js"></script>
-</body>
-</html>
+    <section id="perro_treinta" class="diecinueve">
+    <header id="perro_treintauno" class="veinte">
+    <h2 id="perro_treintados" class="veintiuno">Configuración WiFi</h2>
+    </header>
+    <div class="wifi-controls">
+    <button id="showAvailableNetworks" class="wifi-tab-button active">Redes Disponibles</button>
+    <button id="showSavedNetworks" class="wifi-tab-button">Redes Guardadas</button>
+    </div>
+
+    <div id="availableNetworksSection" class="wifi-section active">
+    <button id="getAvailableNetworks" class="action-button primary-button">Mostrar Redes Disponibles</button>
+    <div class="network-list-container">
+    <p id="loadingAvailable" class="loading-message" style="display: none;">Cargando redes disponibles...</p>
+    <table id="availableNetworksTable" class="network-table" style="display: none;">
+        <thead>
+            <tr>
+                <th>SSID</th>
+                <th>Seguridad</th>
+                <th>Intensidad</th>
+                <th>Contraseña</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <p id="noAvailableNetworks" class="info-message" style="display: none;">Presione el botón para Obtener las Redes Disponibles</p>
+    </div>
+    </div>
+
+    <div id="savedNetworksSection" class="wifi-section">
+    <button id="getSavedNetworks" class="action-button primary-button">Mostrar Redes Guardadas</button>
+    <button id="clearAllSavedNetworks" class="action-button danger-button">Borrar Todas las Redes Guardadas</button>
+    <div class="network-list-container">
+    <p id="loadingSaved" class="loading-message" style="display: none;">Cargando redes guardadas...</p>
+    <table id="savedNetworksTable" class="network-table" style="display: none;">
+        <thead>
+            <tr>
+                <th>Nombre Red</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <p id="noSavedNetworks" class="info-message" style="display: none;">Presione el botón para Obtener las Redes Guardadas</p>
+    </div>
+    </div>
+    </section>
+    </main>
+
+    <div id="toastContainer"></div>
+
+    <script src="Script.js"></script>
+    </body>
+    </html>

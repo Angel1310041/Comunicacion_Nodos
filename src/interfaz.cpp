@@ -1,66 +1,127 @@
-#include "main.h"
+#include "interfaz.h"
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include "pantalla.h"
 
-// --- Configuración del servidor ---
+// Configuración del servidor
 AsyncWebServer server(80);
 
-// WiFi Access Point (configuración modificada)
-IPAddress local_IP(192, 168, 1, 100);       // Nueva IP
-IPAddress gateway(192, 168, 1, 1);          // Nueva puerta de enlace
-IPAddress subnet(255, 255, 255, 0);         // Misma máscara
-const char* ssidAP = "DispositivoIoT";      // Nuevo nombre de red
-const char* passwordAP = "iotpassword123";  // Nueva contraseña
+// WiFi AP config
+const char* ssidAP = "DispositivoIoT";
+const char* passwordAP = "iotpassword123";
 
-// --- Función para configurar los endpoints ---
+IPAddress local_IP(192, 168, 4, 1);
+IPAddress gateway(192, 168, 4, 1);
+IPAddress subnet(255, 255, 255, 0);
+
+// Archivos estáticos comprimidos con gzip
+const char* htmlPath = "/interfaz.html.gz";
+const char* cssPath = "/estilos.css.gz";
+const char* jsPath = "/script.js.gz";
+
 void configurarEndpoints() {
-    // Endpoint principal que sirve el archivo comprimido
+    // Endpoint raíz (HTML comprimido)
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (!SPIFFS.exists("/interfaz.html.gz")) {
-            request->send(404, "text/plain", "Error: interfaz.html.gz no encontrado");
+        if (!SPIFFS.exists(htmlPath)) {
+            request->send(404, "text/plain", "Archivo interfaz no encontrado");
             return;
         }
-        
-        // Configurar la respuesta con compresión gzip
-        AsyncWebServerResponse *response = request->beginResponse(SPIFFS, "/interfaz.html.gz", "text/html");
+        AsyncWebServerResponse *response = request->beginResponse(SPIFFS, htmlPath, "text/html");
         response->addHeader("Content-Encoding", "gzip");
         request->send(response);
     });
 
-    // Puedes añadir más endpoints aquí si es necesario
+    // CSS comprimido
+    server.on("/estilos.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!SPIFFS.exists(cssPath)) {
+            request->send(404, "text/plain", "CSS no encontrado");
+            return;
+        }
+        AsyncWebServerResponse *response = request->beginResponse(SPIFFS, cssPath, "text/css");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+
+    // JavaScript comprimido
+    server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!SPIFFS.exists(jsPath)) {
+            request->send(404, "text/plain", "JS no encontrado");
+            return;
+        }
+        AsyncWebServerResponse *response = request->beginResponse(SPIFFS, jsPath, "application/javascript");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+
+    // Endpoint para obtener configuración
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String jsonResponse = "{\"ssid\":\"" + String(ssidAP) + "\",\"ip\":\"" + WiFi.softAPIP().toString() + "\"}";
+        request->send(200, "application/json", jsonResponse);
+    });
+
+    // Endpoint para salir del modo programación
+    server.on("/exit", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Saliendo modo programación");
+        //salirModoProgramacion();
+    });
+
+    // Manejo de errores 404
+    server.onNotFound([](AsyncWebServerRequest *request) {
+        request->send(404, "text/plain", "Página no encontrada");
+    });
 }
 
-// --- Función para iniciar el modo programación ---
 void iniciarModoProgramacion() {
     Serial.println("Iniciando modo configuración...");
     
     // Inicializar SPIFFS
     if (!SPIFFS.begin(true)) {
         Serial.println("Error al montar SPIFFS");
+        pantallaControl("", "Error SPIFFS", "Reiniciar");
         return;
     }
 
-    // Configurar WiFi como AP
-    WiFi.mode(WIFI_AP);
+    // Configurar modo AP
+    if (!WiFi.mode(WIFI_AP)) {
+        Serial.println("Error al configurar modo AP");
+        pantallaControl("", "Error WiFi", "Modo AP");
+        return;
+    }
+
+    // Configurar red AP
     if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
         Serial.println("Error en configuración de red");
-        return;
-    }
-    
-    if (!WiFi.softAP(ssidAP, passwordAP)) {
-        Serial.println("Error al iniciar el punto de acceso");
+        pantallaControl("", "Error Red", "Config IP");
         return;
     }
 
-    Serial.print("Punto de acceso iniciado. SSID: ");
+    // Iniciar punto de acceso
+    if (!WiFi.softAP(ssidAP, passwordAP)) {
+        Serial.println("Error al iniciar AP");
+        pantallaControl("", "Error AP", "Reiniciar");
+        return;
+    }
+
+    // Mostrar información en pantalla
+    String ip = WiFi.softAPIP().toString();
+    String mensaje = "SSID: " + String(ssidAP) + "\nPass: " + String(passwordAP) + "\nIP: " + ip;
+    pantallaControl("", "MODO CONFIG", mensaje.c_str());
+
+    // Información por serial
+    Serial.println("Punto de acceso iniciado:");
+    Serial.print("SSID: ");
     Serial.println(ssidAP);
+    Serial.print("Contraseña: ");
+    Serial.println(passwordAP);
     Serial.print("IP: ");
     Serial.println(WiFi.softAPIP());
 
-    // Configurar los endpoints del servidor
+    // Configurar endpoints del servidor web
     configurarEndpoints();
+    
+    // Iniciar servidor
     server.begin();
     Serial.println("Servidor web iniciado");
 }

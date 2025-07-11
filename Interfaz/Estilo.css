@@ -7,16 +7,17 @@
     color: #333;
     display: flex;
     min-height: 100vh;
+    flex-direction: column; /* Changed to column to allow header to be fixed */
     }
 
     /* ===== Header principal ===== */
-    .uno { /* id="perro_uno" */
+    .uno {
     background-color: #2c3e50;
     color: white;
     padding: 15px 20px;
     display: flex;
     align-items: center;
-    justify-content: center; /* Centra el título horizontalmente */
+    justify-content: center;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     position: fixed;
     width: 100%;
@@ -26,7 +27,7 @@
     }
 
     /* ===== Menú hamburguesa ===== */
-    .dos { /* id="perro_dos" */
+    .dos {
     position: absolute;
     left: 20px;
     top: 50%;
@@ -63,7 +64,7 @@
     }
 
     /* Animación hamburguesa a "X" */
-    .cinco.active .dos {
+    .cinco.active .dos { /* Targets the icon when sidebar is active */
     background-color: transparent;
     }
 
@@ -76,36 +77,37 @@
     }
 
     /* ===== Título dentro del header ===== */
-    .tres { /* id="perro_tres" */
+    .tres {
     flex-grow: 1;
     text-align: center;
     }
 
-    .cuatro { /* id="perro_cuatro" */
+    .cuatro {
     margin: 0;
     font-size: 24px;
     font-weight: 600;
     }
 
     /* ===== Barra lateral ===== */
-    .cinco { /* id="perro_cinco" */
+    .cinco {
     background-color: #34495e;
     color: white;
     width: 250px;
-    padding-top: 80px;
+    padding-top: 80px; /* Space for fixed header */
     position: fixed;
     height: 100%;
     left: -250px;
     transition: left 0.3s ease-in-out;
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
     z-index: 999;
+    overflow-y: auto; /* Enable scrolling for long menus */
     }
 
     .cinco.active {
     left: 0;
     }
 
-    .seis { /* id="perro_seis" */
+    .seis {
     text-align: center;
     margin-bottom: 30px;
     font-size: 22px;
@@ -113,24 +115,30 @@
     color: #ecf0f1;
     }
 
-    .siete ul { /* id="perro_siete" */
+    .siete ul {
     list-style: none;
     padding: 0;
     margin: 0;
     }
 
     .ocho, .nueve, .diez {
-    margin-bottom: 10px;
+    margin-bottom: 5px; /* Slightly less space */
     }
 
     .ocho a, .nueve a, .diez a {
-    display: block;
+    display: flex; /* Use flexbox for icon alignment */
+    align-items: center; /* Align icon and text vertically */
     padding: 15px 20px;
     color: white;
     text-decoration: none;
     font-size: 18px;
     transition: background-color 0.3s ease, color 0.3s ease;
     border-left: 5px solid transparent;
+    }
+
+    .menu-icon {
+    margin-right: 15px; /* Space between icon and text */
+    font-size: 20px;
     }
 
     .ocho a:hover, .nueve a:hover, .diez a:hover,
@@ -141,9 +149,9 @@
     }
 
     /* ===== Contenido principal ===== */
-    .once { /* id="perro_once" */
+    .once {
     margin-left: 0;
-    padding: 90px 20px 20px 20px;
+    padding: 90px 20px 20px 20px; /* Top padding to clear fixed header */
     flex-grow: 1;
     transition: margin-left 0.3s ease-in-out;
     width: 100%;
@@ -154,7 +162,7 @@
     margin-left: 250px;
     }
 
-    .doce, .diecinueve { /* secciones de contenido */
+    .doce, .diecinueve {
     background-color: white;
     padding: 30px;
     border-radius: 8px;
@@ -207,8 +215,54 @@
     color: #3498db;
     }
 
-    /* ===== Botones ===== */
-    .veinticinco, .veintiseis {
+    /* ===== Buttons General Styling ===== */
+    .action-button {
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-right: 10px;
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    white-space: nowrap; /* Prevent text wrapping */
+    }
+
+    .action-button:last-child {
+    margin-right: 0;
+    }
+
+    .action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .primary-button {
+    background-color: #3498db;
+    }
+    .primary-button:hover {
+    background-color: #2980b9;
+    }
+
+    .success-button {
+    background-color: #2ecc71;
+    }
+    .success-button:hover {
+    background-color: #27ae60;
+    }
+
+    .danger-button {
+    background-color: #e74c3c;
+    }
+    .danger-button:hover {
+    background-color: #c0392b;
+    }
+
+    /* ===== Old Buttons (Can be refactored to new system) ===== */
+    .veinticinco { /* Encender */
+    /* Use @extend or simply apply properties directly */
+    background-color: #3498db;
     color: white;
     border: none;
     padding: 12px 25px;
@@ -216,24 +270,363 @@
     cursor: pointer;
     font-size: 16px;
     margin-right: 15px;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    }
-
-    .veinticinco {
-    background-color: #3498db;
     }
 
     .veinticinco:hover {
     background-color: #2980b9;
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     }
 
-    .veintiseis {
+    .veintiseis { /* Apagar */
     background-color: #e74c3c;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-right: 15px; /* Adjust if needed */
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
 
     .veintiseis:hover {
     background-color: #c0392b;
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+
+    /* ===== Formulario WiFi (Original, might not be used directly) ===== */
+    .wifi-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    }
+
+    .wifi-input {
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    width: calc(100% - 30px); /* Adjust for padding */
+    box-sizing: border-box;
+    }
+
+    .wifi-input:focus {
+    border-color: #3498db;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+    }
+
+    .wifi-save { /* Original save button, now replaced by new buttons */
+    background-color: #2ecc71;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+    }
+
+    .wifi-save:hover {
+    background-color: #27ae60;
+    }
+
+    .wifi-status {
+    margin-top: 10px;
+    font-size: 16px;
+    color: #3498db;
+    text-align: center;
+    }
+
+
+    /* ===== WiFi Section Specific Styles ===== */
+    .wifi-controls {
+    display: flex;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+    }
+
+    .wifi-tab-button {
+    flex: 1;
+    padding: 15px;
+    background-color: #ecf0f1;
+    border: none;
+    cursor: pointer;
+    font-size: 17px;
+    font-weight: 600;
+    color: #34495e;
+    transition: background-color 0.3s ease, color 0.3s ease, border-bottom 0.3s ease;
+    border-radius: 8px 8px 0 0;
+    margin-right: 5px;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.05); /* subtle inner shadow */
+    }
+
+    .wifi-tab-button:last-child {
+    margin-right: 0;
+    }
+
+    .wifi-tab-button.active {
+    background-color: #3498db;
+    color: white;
+    border-bottom: 3px solid #2980b9;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+
+    .wifi-tab-button:hover:not(.active) {
+    background-color: #dfe6e9;
+    color: #2c3e50;
+    }
+
+    .wifi-section {
+    display: none; /* Hidden by default, JavaScript controls visibility */
+    padding-top: 15px;
+    }
+
+    .wifi-section.active {
+    display: block;
+    }
+
+    /* Network Table Styling */
+    .network-list-container {
+    margin-top: 20px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    overflow-x: auto; /* Allows horizontal scrolling for small screens */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .network-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px; /* Space after buttons */
+    }
+
+    .network-table th,
+    .network-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+    white-space: nowrap; /* Prevent text wrapping in cells */
+    }
+
+    .network-table th {
+    background-color: #f8f8f8;
+    color: #34495e;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 14px;
+    }
+
+    .network-table tbody tr:nth-child(even) {
+    background-color: #fcfcfc;
+    }
+
+    /* WiFi signal icon */
+    .signal-icon {
+    font-size: 18px;
+    color: #2ecc71; /* Green for strong signal */
+    }
+
+    .signal-icon.medium {
+    color: #f39c12; /* Orange for medium signal */
+    }
+
+    .signal-icon.weak {
+    color: #e74c3c; /* Red for weak signal */
+    }
+
+    /* Table Buttons */
+    .table-button {
+    padding: 8px 15px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+    }
+
+    .connect-button {
+    background-color: #3498db;
+    color: white;
+    border: 1px solid #3498db;
+    }
+    .connect-button:hover {
+    background-color: #2980b9;
+    }
+
+    .edit-button {
+    background-color: #f39c12;
+    color: white;
+    border: 1px solid #f39c12;
+    }
+    .edit-button:hover {
+    background-color: #e67e22;
+    }
+
+    .delete-button {
+    background-color: #e74c3c;
+    color: white;
+    border: 1px solid #e74c3c;
+    margin-left: 5px;
+    }
+    .delete-button:hover {
+    background-color: #c0392b;
+    }
+
+    /* Info and Loading Messages */
+    .loading-message, .info-message {
+    text-align: center;
+    padding: 20px;
+    color: #555;
+    font-style: italic;
+    }
+
+    /* Toast Notifications */
+    #toastContainer {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    }
+
+    .toast {
+    background-color: #333;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: slideInToast 0.5s forwards, fadeOutToast 0.5s forwards 2.5s; /* Fade out after 2.5s delay */
+    min-width: 250px;
+    text-align: center;
+    font-size: 15px;
+    }
+
+    .toast.success {
+    background-color: #28a745; /* Green */
+    }
+
+    .toast.error {
+    background-color: #dc3545; /* Red */
+    }
+
+    @keyframes slideInToast {
+    to {
+    opacity: 1;
+    transform: translateY(0);
+    }
+    }
+
+    @keyframes fadeOutToast {
+    to {
+    opacity: 0;
+    transform: translateY(-20px);
+    }
+    }
+
+    /* Responsive Adjustments */
+    @media (max-width: 768px) {
+    .cinco {
+    width: 200px;
+    left: -200px;
+    }
+
+    .once.shifted {
+    margin-left: 200px;
+    }
+
+    .ocho a, .nueve a, .diez a {
+    font-size: 16px;
+    padding: 12px 15px;
+    }
+
+    .cuatro {
+    font-size: 20px;
+    }
+
+    .action-button {
+    padding: 10px 18px;
+    font-size: 14px;
+    }
+
+    .network-table th,
+    .network-table td {
+    padding: 10px;
+    font-size: 14px;
+    }
+
+    .wifi-tab-button {
+    font-size: 15px;
+    padding: 12px;
+    }
+    }
+
+    @media (max-width: 480px) {
+    .uno {
+    padding: 10px 15px;
+    }
+
+    .dos {
+    left: 10px;
+    }
+
+    .cuatro {
+    font-size: 18px;
+    }
+
+    .cinco {
+    width: 180px;
+    left: -180px;
+    padding-top: 60px;
+    }
+
+    .once {
+    padding: 70px 15px 15px 15px;
+    }
+
+    .once.shifted {
+    margin-left: 180px;
+    }
+
+    .ocho a, .nueve a, .diez a {
+    font-size: 15px;
+    padding: 10px 12px;
+    }
+
+    .catorce, .veintiuno {
+    font-size: 22px;
+    }
+
+    .action-button {
+    display: block; /* Stack buttons on small screens */
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 10px;
+    }
+    .action-button:last-child {
+    margin-bottom: 0;
+    }
+
+    .wifi-tab-button {
+    font-size: 14px;
+    padding: 10px;
+    }
+
+    .network-table th,
+    .network-table td {
+    font-size: 12px;
+    padding: 8px;
+    }
     }

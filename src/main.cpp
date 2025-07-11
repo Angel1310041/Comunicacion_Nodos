@@ -3,6 +3,7 @@
 #include <RadioLib.h>
 #include "heltec.h"
 #include "pantalla.h"
+#include "interfaz.h"
 
 // Pines LoRa
 #define LORA_MOSI 10
@@ -35,20 +36,20 @@ extern const int nodeID; // Definido en pantalla.cpp
 bool modoProgramacion = false;
 unsigned long tiempoPresionado = 0;
 bool botonPresionado = false;
+unsigned long lastUpdate = 0;
+unsigned long lastActivity = 0;
 
 void setup() {
     Heltec.begin(true /*DisplayEnable*/, false /*LoRaEnable*/, true /*SerialEnable*/);
     Serial.begin(115200);
     delay(1000);
 
-    // Configurar pines
-    pinMode(BOTON_MODO_PROG, INPUT_PULLUP); // Botón con resistencia pull-up
+    pinMode(BOTON_MODO_PROG, INPUT_PULLUP);
     pinMode(LED_STATUS, OUTPUT);
     digitalWrite(LED_STATUS, LOW);
 
-    pantallaControl("on", "Iniciando...", "", true);  // Activa pantalla
+    pantallaControl("on", "Iniciando...", "", true);
 
-    // Inicialización LoRa
     if (lora.begin() != RADIOLIB_ERR_NONE) {
         Serial.println("LoRa: FALLÓ inicialización");
         pantallaControl("", "Error LoRa", "Reiniciar");
@@ -61,22 +62,23 @@ void setup() {
     Serial.println("  pantalla [on|off|toggle|show msg]");
     Serial.println("  lora [on|off]");
     Serial.println("  Enviar mensaje: ID_DESTINO|mensaje");
+    Serial.println("  exitprog - Salir modo programación");
 
     pantallaControl("", "Nodo " + String(nodeID), "Esperando datos...");
 }
 
 void entrarModoProgramacion() {
     modoProgramacion = true;
-    digitalWrite(LED_STATUS, HIGH); // Encender LED de estado
-    pantallaControl("", "MODO PROG", "Activo");
+    digitalWrite(LED_STATUS, HIGH);
+    lastActivity = millis();
     Serial.println("Modo programación activado");
-    
-    // Aquí puedes agregar cualquier otra configuración específica del modo programación
+    iniciarModoProgramacion();
 }
 
 void salirModoProgramacion() {
     modoProgramacion = false;
-    digitalWrite(LED_STATUS, LOW); // Apagar LED de estado
+    digitalWrite(LED_STATUS, LOW);
+    WiFi.softAPdisconnect(true);
     pantallaControl("", "Nodo " + String(nodeID), "Operación normal");
     Serial.println("Modo programación desactivado");
 }
@@ -99,8 +101,8 @@ void controlLoRa(String accion) {
 }
 
 void loop() {
-    // Verificación del botón de modo programación
-    if (digitalRead(BOTON_MODO_PROG) == LOW) { // Botón presionado (LOW porque es pull-up)
+    // Control del botón para modo programación
+    if (digitalRead(BOTON_MODO_PROG) == LOW) {
         if (!botonPresionado) {
             botonPresionado = true;
             tiempoPresionado = millis();
@@ -108,70 +110,64 @@ void loop() {
             entrarModoProgramacion();
         }
     } else {
-        if (botonPresionado) {
-            botonPresionado = false;
-            // Si estaba en modo programación y se suelta el botón, salir del modo
-            if (modoProgramacion) {
-                salirModoProgramacion();
-            }
-        }
+        botonPresionado = false;
     }
 
-    // Si no estamos en modo programación, ejecutar el loop normal
+    // Comandos por serial
+    if (Serial.available()) {
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        lastActivity = millis();
+        Serial.println("Comando: " + input);
+
+        if (input == "exitprog" && modoProgramacion) {
+            salirModoProgramacion();
+            return;
+        }
+
+        if (input.startsWith("pantalla ")) {
+            pantallaControl(input.substring(9));
+            return;
+        }
+        else if (input.startsWith("lora ")) {
+            controlLoRa(input.substring(5));
+            return;
+        }
+
+        int sep = input.indexOf('|');
+        if (sep > 0) {
+            int destino = input.substring(0, sep).toInt();
+            String mensaje = input.substring(sep + 1);
+
+            if (destino != nodeID && mensaje.length() > 0) {
+                int siguienteHop = (destino > nodeID) ? nodeID + 1 : nodeID - 1;
+
+                String paquete = "ORIG:" + String(nodeID) +
+                                "|DEST:" + String(destino) +
+                                "|MSG:" + mensaje +
+                                "|HOP:" + String(siguienteHop);
+
+                pantallaControl("", "Enviando a", "HOP: " + String(siguienteHop));
+                
+                int resultado = lora.transmit(paquete);
+                if (resultado == RADIOLIB_ERR_NONE) {
+                    pantallaControl("", "Mensaje enviado", "OK");
+                } else {
+                    pantallaControl("", "Error envio", "Cod: " + String(resultado));
+                }
+            }
+        }
+        lastUpdate = millis();
+    }
+
     if (!modoProgramacion) {
-        // Actualización periódica de pantalla
-        static unsigned long lastUpdate = 0;
+        // Operación normal
         if (millis() - lastUpdate > 5000) {  
             pantallaControl("", "Nodo " + String(nodeID), "Esperando...");
             lastUpdate = millis();
         }
 
-        // Procesamiento de comandos seriales
-        if (Serial.available()) {
-            String input = Serial.readStringUntil('\n');
-            input.trim();
-            Serial.println("Comando: " + input); // Echo del comando
-
-            // Comandos de pantalla
-            if (input.startsWith("pantalla ")) {
-                pantallaControl(input.substring(9));
-                return;
-            }
-            
-            // Comandos LoRa
-            else if (input.startsWith("lora ")) {
-                controlLoRa(input.substring(5));
-                return;
-            }
-
-            // Procesamiento de mensajes LoRa
-            int sep = input.indexOf('|');
-            if (sep > 0) {
-                int destino = input.substring(0, sep).toInt();
-                String mensaje = input.substring(sep + 1);
-
-                if (destino != nodeID && mensaje.length() > 0) {
-                    int siguienteHop = (destino > nodeID) ? nodeID + 1 : nodeID - 1;
-
-                    String paquete = "ORIG:" + String(nodeID) +
-                                    "|DEST:" + String(destino) +
-                                    "|MSG:" + mensaje +
-                                    "|HOP:" + String(siguienteHop);
-
-                    pantallaControl("", "Enviando a", "HOP: " + String(siguienteHop));
-                    
-                    int resultado = lora.transmit(paquete);
-                    if (resultado == RADIOLIB_ERR_NONE) {
-                        pantallaControl("", "Mensaje enviado", "OK");
-                    } else {
-                        pantallaControl("", "Error envio", "Cod: " + String(resultado));
-                    }
-                }
-            }
-            lastUpdate = millis();
-        }
-
-        // Recepción de mensajes LoRa
+        // Recepción LoRa
         String msg;
         int state = lora.receive(msg);
         if (state == RADIOLIB_ERR_NONE) {
@@ -188,11 +184,20 @@ void loop() {
                 lora.transmit(nuevoMsg);
                 pantallaControl("", "Reenviando a", "HOP: " + String(siguienteHop));
             }
-            lastUpdate = millis();
         }
     } else {
-        // Aquí puedes agregar código específico para cuando está en modo programación
-        // Por ejemplo, podrías desactivar las funciones normales o activar otras
+        // Modo programación
+        if (millis() - lastUpdate > 5000) {
+            String ip = WiFi.softAPIP().toString();
+            String mensaje = "SSID: " + String(ssidAP) + "\nPass: " + String(passwordAP) + "\nIP: " + ip;
+            pantallaControl("", "MODO CONFIG", mensaje.c_str());
+            lastUpdate = millis();
+        }
+
+        // Salir después de 10 minutos de inactividad (opcional)
+        if (millis() - lastActivity > 600000) {
+            salirModoProgramacion();
+        }
     }
 
     delay(100);
