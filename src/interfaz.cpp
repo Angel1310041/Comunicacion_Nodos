@@ -1,164 +1,66 @@
 #include "main.h"
 #include <SPIFFS.h>
 #include <WiFi.h>
-#include <ArduinoJson.h>
-#include <esp_system.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <Ticker.h>
-#include <EEPROM.h>
 
-// --- Definiciones ---
+// --- Configuración del servidor ---
 AsyncWebServer server(80);
 
-// WiFi Access Point
-IPAddress local_IP(192, 168, 8, 28);
-IPAddress gateway(192, 168, 8, 1);
-IPAddress subnet(255, 255, 255, 0);
-const char* ssidAP = "Meserito-ABM";
-const char* passwordAP = "12345678";
+// WiFi Access Point (configuración modificada)
+IPAddress local_IP(192, 168, 1, 100);       // Nueva IP
+IPAddress gateway(192, 168, 1, 1);          // Nueva puerta de enlace
+IPAddress subnet(255, 255, 255, 0);         // Misma máscara
+const char* ssidAP = "DispositivoIoT";      // Nuevo nombre de red
+const char* passwordAP = "iotpassword123";  // Nueva contraseña
 
-Ticker restartTimer;
-
-// --- Funciones Auxiliares ---
-void animacionCarga() {
-    const char* estados[] = {"-", "\\", "|", "/"};
-    for (int i = 0; i < 10; i++) {
-        Serial.print("\rCargando... ");
-        Serial.print(estados[i % 4]);
-        vTaskDelay(200 / portTICK_PERIOD_MS);
-    }
-    Serial.println("\rCargando... ¡Listo!");
-}
-
-void programarReinicio() {
-    restartTimer.once(1.0, []() {
-        ESP.restart();
-    });
-}
-
-
-
-
-
-// --- Endpoints del Servidor Web ---
+// --- Función para configurar los endpoints ---
 void configurarEndpoints() {
+    // Endpoint principal que sirve el archivo comprimido
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!SPIFFS.exists("/interfaz.html.gz")) {
-            request->send(404, "text/plain", "Archivo no encontrado");
+            request->send(404, "text/plain", "Error: interfaz.html.gz no encontrado");
             return;
         }
-        auto* response = request->beginResponse(SPIFFS, "/interfaz.html.gz", "text/html");
+        
+        // Configurar la respuesta con compresión gzip
+        AsyncWebServerResponse *response = request->beginResponse(SPIFFS, "/interfaz.html.gz", "text/html");
         response->addHeader("Content-Encoding", "gzip");
         request->send(response);
     });
 
-    server.on("/guardar-parametros", HTTP_POST, [](AsyncWebServerRequest *request) {}, nullptr,
-    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t, size_t) {
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, data, len);
-        if (error) {
-            request->send(400, "application/json", "{\"error\":\"JSON inválido\"}");
-            return;
-        }
-
-        int id = doc["order-id"];
-        const char* tipoTexto = doc["selected-food-item"];
-        const char* estadoTexto = doc["attention-state"];
-
-        if (id < 1 || id > 99 || strlen(tipoTexto) == 0 || strlen(estadoTexto) == 0) {
-            request->send(400, "application/json", "{\"error\":\"Parámetros inválidos\"}");
-            return;
-        }
-
-        guardarOrdenEnEEPROM(id, tipoTexto, estadoTexto);
-
-        request->send(200, "application/json", "{\"status\":\"ok\"}");
-    });
-
-    server.on("/get-parametros", HTTP_GET, [](AsyncWebServerRequest *request) {
-        JsonDocument doc;
-        doc["id"] = ordenActual.id;
-        doc["tipo"] = ordenActual.tipo;
-        doc["estado"] = ordenActual.estado;
-        String output;
-        serializeJson(doc, output);
-        request->send(200, "application/json", output);
-    });
-
-    server.on("/enviar-lora", HTTP_POST, [](AsyncWebServerRequest *request) {}, nullptr,
-        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t, size_t) {
-            JsonDocument doc;
-            if (deserializeJson(doc, data, len)) {
-                request->send(400, "application/json", "{\"error\":\"JSON inválido\"}");
-                return;
-            }
-            mensajePendiente = doc["mensaje"].as<String>();
-            enviarLoraPendiente = true;
-            request->send(200, "application/json", "{\"status\":\"Mensaje en cola\"}");
-        });
-
-    server.on("/reiniciar", HTTP_POST, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Reiniciando...");
-        programarReinicio();
-    });
-
-    server.on("/salir-modo-prog", HTTP_POST, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Saliendo del modo programación...");
-        modoprog = false;
-        digitalWrite(LED_PIN, LOW);
-        programarReinicio();
-    });
+    // Puedes añadir más endpoints aquí si es necesario
 }
 
+// --- Función para iniciar el modo programación ---
 void iniciarModoProgramacion() {
-    Serial.println("Iniciando modo programación...");
-    WiFi.mode(WIFI_AP);
-    if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
-        Serial.println("Error al configurar IP estática");
-        return;
-    }
-    if (!WiFi.softAP(ssidAP, passwordAP)) {
-        Serial.println("Error al iniciar el AP");
-        return;
-    }
-    Serial.println("AP iniciado en: " + WiFi.softAPIP().toString());
-    configurarEndpoints();
-    server.begin();
-}
-
-void entrarmodoprog() {
-    digitalWrite(LED_PIN, HIGH);
-   // digitalWrite(LORA_LED, HIGH);
+    Serial.println("Iniciando modo configuración...");
     
-    // Inicializa SPIFFS para los archivos web
+    // Inicializar SPIFFS
     if (!SPIFFS.begin(true)) {
-        imprimir("Error montando SPIFFS", "rojo");
+        Serial.println("Error al montar SPIFFS");
         return;
     }
 
-    // Carga datos de EEPROM
-    EEPROM.begin(512);
-    cargarOrdenDesdeEEPROM(true); // true para imprimir los datos
-
-    // Configuración WiFi AP con IP estática
+    // Configurar WiFi como AP
     WiFi.mode(WIFI_AP);
     if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
-        imprimir("Error configurando IP", "rojo");
+        Serial.println("Error en configuración de red");
         return;
     }
     
     if (!WiFi.softAP(ssidAP, passwordAP)) {
-        imprimir("Error iniciando AP", "rojo");
+        Serial.println("Error al iniciar el punto de acceso");
         return;
     }
 
-    // Configura endpoints del servidor web
+    Serial.print("Punto de acceso iniciado. SSID: ");
+    Serial.println(ssidAP);
+    Serial.print("IP: ");
+    Serial.println(WiFi.softAPIP());
+
+    // Configurar los endpoints del servidor
     configurarEndpoints();
     server.begin();
-
-    imprimir("Modo Programación", "amarillo");
-    imprimir("Conéctese a:", "amarillo");
-    imprimir("Red: Meserito-ABM", "amarillo");
-    imprimir("IP: " + WiFi.softAPIP().toString(), "amarillo");
+    Serial.println("Servidor web iniciado");
 }

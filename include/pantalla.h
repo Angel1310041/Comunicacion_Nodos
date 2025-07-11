@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-extern bool Pantalla;
-void Pantallas(bool estado);
-
+// Solo aquí los argumentos por defecto
+void pantallaControl(String comando = "", String linea1 = "", String linea2 = "", bool mostrarInfo = true);
+extern const int nodeID;
 #endif

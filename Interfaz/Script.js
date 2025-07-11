@@ -1,90 +1,169 @@
 document.addEventListener('DOMContentLoaded', () => {
-// Elementos del DOM
-const menuIcon = document.getElementById('menuIcon');
-const sidebar = document.getElementById('sidebar');
-const closeSidebarBtn = document.getElementById('closeSidebar');
-const overlay = document.getElementById('overlay');
-const inicioOption = document.getElementById('inicioOption');
-const pantallaOption = document.getElementById('pantallaOption');
-const homeSection = document.getElementById('homeSection');
-const pantallaSettingsCard = document.getElementById('pantallaSettings');
-const mainSectionTitle = document.getElementById('mainSectionTitle');
-const currentStatusText = document.getElementById('currentStatus');
-const pantallaVariableInput = document.getElementById('pantallaVariable');
-const pantallaSelector = document.getElementById('pantallaSelector');
-const saveScreenStateBtn = document.getElementById('saveScreenState');
+    // Selectores (manteniendo IDs perro_XX)
+    const $ = id => document.getElementById(id);
+    const sidebar = $('perro_cinco');
+    const menuToggle = $('perro_dos'); // El icono de las tres líneas
+    const mainContent = $('perro_once');
+    const navLinks = document.querySelectorAll('#perro_siete ul li a');
+    const screenStatusSummary = $('perro_dieciocho');
+    const screenStatusDetail = $('perro_veinticuatro');
+    const turnOnButton = $('perro_veinticinco');
+    const turnOffButton = $('perro_veintiseis');
 
-// Estado
-let pantallaEstado = false;
-let pantallaNombreVariable = "pantallaActiva";
 
-// 1. Manejo de UI y navegación
-function manejarUI(accion, seccion = null, titulo = '') {
-if (accion === 'abrirSidebar') {
-sidebar.style.width = "250px";
-overlay.classList.add('active');
-} else if (accion === 'cerrarSidebar') {
-sidebar.style.width = "0";
-overlay.classList.remove('active');
-} else if (accion === 'mostrarSeccion') {
-homeSection.classList.add('hidden');
-pantallaSettingsCard.classList.add('hidden');
-seccion.classList.remove('hidden');
-mainSectionTitle.textContent = titulo;
-}
-}
+    // Estado del sistema (considerando los elementos existentes)
+    let sistema = {
+        pantalla: false,
+        serialConnected: false, // Mantener para futura expansión o si los elementos existen en otro lugar
+        port: null // Mantener para futura expansión
+    };
 
-// 2. Actualizar estado visual de la pantalla
-function actualizarEstadoPantalla(estado) {
-pantallaEstado = estado;
-currentStatusText.textContent = estado ? "Estado: ENCENDIDA" : "Estado: APAGADA";
-currentStatusText.style.color = estado ? "#28a745" : "#dc3545";
-pantallaSelector.value = estado.toString();
-pantallaVariableInput.value = pantallaNombreVariable;
-}
+    // Actualizar interfaz (ajustado para los elementos existentes)
+    const updateStatus = () => {
+        screenStatusSummary.textContent = sistema.pantalla ? 'ENCENDIDA' : 'APAGADA';
+        screenStatusDetail.textContent = sistema.pantalla ? 'Encendida' : 'Apagada';
+        // if (statusIndicator) { // Verificar si el elemento existe antes de intentar usarlo
+        //     statusIndicator.textContent = sistema.serialConnected ? 'Conectado' : 'Desconectado';
+        //     statusIndicator.className = sistema.serialConnected ? 'connected' : 'disconnected';
+        // }
+    };
 
-// 3. Comunicación con backend y guardar cambios
-function guardarPantalla() {
-const nuevoEstado = pantallaSelector.value === 'true';
-const nuevoNombreVariable = pantallaVariableInput.value;
-fetch('/pantalla', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ estado: nuevoEstado, nombreVariable: nuevoNombreVariable }),
-})
-.then(response => response.json())
-.then(data => {
-pantallaNombreVariable = nuevoNombreVariable;
-actualizarEstadoPantalla(nuevoEstado);
-alert(data.mensaje || '¡Configuración de pantalla guardada con éxito!');
-manejarUI('mostrarSeccion', homeSection, 'Inicio');
-})
-.catch(error => {
-console.error('Error al comunicarse con el servidor:', error);
-alert('Error de conexión al guardar la configuración.');
-});
-}
+    // WebSerial API (Mantenido, pero los elementos HTML asociados no están en el código que proporcionaste)
+    const connectSerial = async () => {
+        try {
+            sistema.port = await navigator.serial.requestPort();
+            await sistema.port.open({ baudRate: 115200 });
+            sistema.serialConnected = true;
 
-// 4. Inicialización y listeners
-function inicializar() {
-actualizarEstadoPantalla(false);
-manejarUI('mostrarSeccion', homeSection, 'Inicio');
+            const reader = sistema.port.readable.getReader();
+            while (sistema.serialConnected) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const text = new TextDecoder().decode(value);
+                // if (consoleOutput) { // Verificar si el elemento existe
+                //     consoleOutput.innerHTML += `> ${text}<br>`;
+                //     consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                // }
+            }
+        } catch (error) {
+            console.error('Error Serial:', error);
+            alert(`Error de conexión: ${error}`);
+        }
+        updateStatus();
+    };
 
-menuIcon.addEventListener('click', () => manejarUI('abrirSidebar'));
-closeSidebarBtn.addEventListener('click', () => manejarUI('cerrarSidebar'));
-overlay.addEventListener('click', () => manejarUI('cerrarSidebar'));
-inicioOption.addEventListener('click', () => {
-manejarUI('cerrarSidebar');
-manejarUI('mostrarSeccion', homeSection, 'Inicio');
-});
-pantallaOption.addEventListener('click', () => {
-manejarUI('cerrarSidebar');
-manejarUI('mostrarSeccion', pantallaSettingsCard, 'Configuración de Pantalla');
-pantallaSelector.value = pantallaEstado.toString();
-pantallaVariableInput.value = pantallaNombreVariable;
-});
-saveScreenStateBtn.addEventListener('click', guardarPantalla);
-}
+    const disconnectSerial = () => {
+        if (sistema.port) {
+            sistema.serialConnected = false;
+            sistema.port.close();
+            sistema.port = null;
+        }
+        updateStatus();
+    };
 
-inicializar();
+    const sendCommand = async (command) => {
+        if (!sistema.serialConnected) {
+            alert("Primero conecta el puerto serial");
+            return;
+        }
+
+        const writer = sistema.port.writable.getWriter();
+        await writer.write(new TextEncoder().encode(command + '\n'));
+        writer.release();
+        // if (consoleOutput) { // Verificar si el elemento existe
+        //     consoleOutput.innerHTML += `< ${command}<br>`;
+        //     consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        // }
+    };
+
+    // Control de pantalla
+    if (turnOnButton) {
+        turnOnButton.onclick = () => {
+            sendCommand('pantalla on');
+            sistema.pantalla = true;
+            updateStatus();
+        };
+    }
+
+    if (turnOffButton) {
+        turnOffButton.onclick = () => {
+            sendCommand('pantalla off');
+            sistema.pantalla = false;
+            updateStatus();
+        };
+    }
+
+    // Enviar mensaje personalizado (comentado ya que los elementos no están en el HTML)
+    // if (sendButton) {
+    //     sendButton.onclick = () => {
+    //         const message = messageInput.value.trim();
+    //         if (message) {
+    //             sendCommand(message);
+    //             messageInput.value = '';
+    //         }
+    //     };
+    // }
+
+    // Conexión Serial (comentado ya que los elementos no están en el HTML)
+    // if (connectButton) {
+    //     connectButton.onclick = () => {
+    //         if (sistema.serialConnected) {
+    //             disconnectSerial();
+    //         } else {
+    //             connectSerial();
+    //         }
+    //     };
+    // }
+
+    // Toggle sidebar
+    menuToggle.onclick = () => {
+        sidebar.classList.toggle('active');
+        mainContent.classList.toggle('shifted');
+        menuToggle.classList.toggle('active'); // <-- AÑADE ESTA LÍNEA
+    };
+
+    // Navegación
+    navLinks.forEach(link => link.onclick = e => {
+        e.preventDefault();
+        const sectionId = link.dataset.section;
+
+        if (sectionId === 'salir') {
+            if (confirm('¿Deseas salir y reiniciar la tarjeta?')) {
+                disconnectSerial();
+                location.reload();
+            }
+            return;
+        }
+
+        // Cambiar sección activa
+        // Es mejor seleccionar las secciones por una clase común, no por IDs fijos.
+        // Asumiendo que 'perro_doce' y 'perro_diecinueve' son las secciones de contenido.
+        document.querySelectorAll('main section').forEach(section => { // <-- CAMBIO AQUÍ
+            section.classList.remove('active-section');
+        });
+
+        // Asegúrate de que las secciones tengan una clase común, por ejemplo, 'content-section'.
+        // Si no, puedes mantener la lógica original o mejorarla con un mapeo de data-section a IDs.
+        const targetSectionId = sectionId === 'inicio' ? 'perro_doce' : (sectionId === 'pantalla' ? 'perro_diecinueve' : null);
+        if (targetSectionId) {
+            $(targetSectionId).classList.add('active-section');
+        }
+
+
+        // Cambiar enlace activo
+        navLinks.forEach(nl => nl.classList.remove('active'));
+        link.classList.add('active');
+
+        // Cerrar sidebar después de navegar
+        sidebar.classList.remove('active');
+        mainContent.classList.remove('shifted');
+        menuToggle.classList.remove('active'); // <-- AÑADE ESTA LÍNEA para resetear el icono
+    });
+
+    // Estado inicial
+    updateStatus();
+    // Asegúrate de que solo la sección de inicio esté activa al cargar
+    $('perro_doce').classList.add('active-section');
+    $('perro_diecinueve').classList.remove('active-section'); // Asegúrate de que la otra sección esté oculta
+    document.querySelector('#perro_ocho a').classList.add('active'); // Activa el enlace de "Inicio"
 });
