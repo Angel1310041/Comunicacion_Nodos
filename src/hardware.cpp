@@ -11,19 +11,37 @@ void Hardware::inicializar() {
   Hardware::tarjetaNueva();
   pinMode(LED_STATUS, OUTPUT);
   pinMode(TEST_IN, INPUT);
-  Hardware::configurarPinesGPIO(pinNumbers);
+  Hardware::configurarPinesGPIO(tarjeta.PinesGPIO, tarjeta.FlancosGPIO);
 }
 
-void Hardware::configurarPinesGPIO(const int PinesGPIO[6]) {
-  // Suponiendo que tarjeta.PinesGPIO es un arreglo de 6 elementos
-  for (int i = 0; i < 6; ++i) {
-    if (PinesGPIO[i] == 1) {
-      imprimirSerial("Pin " + String(pinNames[i]) + " configurado como entrada", 'b');
+void Hardware::configurarPinesGPIO(char PinesGPIO[6], char Flancos[6]) {
+  String mensajePines = ""; // Variable para armar mensaje personalizado
+  for (int i = 0; i < 6; ++i) { // Bucle for para configurar los pines GPIO
+    if (PinesGPIO[i] == 'E') { // Condicional para entradas
+      mensajePines = "Pin " + String(pinNames[i]) + " configurado como entrada con flanco ";
+      if (Flancos[i] == 'A') {
+        mensajePines += "ascendente"; // Activacion con pulsos altos
+      } else if (Flancos[i] == 'D') {
+        mensajePines += "descendente"; // Activacion con pulsos bajos
+      } else {
+        mensajePines += "no especificado"; // Sin especificar
+      }
+      imprimirSerial(mensajePines, 'b');
       pinMode(pinNumbers[i], INPUT);
-    } else if (PinesGPIO[i] == 2) {
-      imprimirSerial("Pin " + String(pinNames[i]) + " configurado como salida", 'b');
+
+    } else if (PinesGPIO[i] == 'S') { // Condicional para salidas
+      mensajePines = "Pin " + String(pinNames[i]) + " configurado como entrada con flanco ";
+      if (Flancos[i] == 'A') {
+        mensajePines += "ascendente"; // Salida activa con pulso alto
+      } else if (Flancos[i] == 'D') {
+        mensajePines += "descendente"; // Salida activa con pulso bajo
+      } else {
+        mensajePines += "no especificado"; // Salida con pulso indefinido
+      }
+      imprimirSerial(mensajePines, 'b');
       pinMode(pinNumbers[i], OUTPUT);
-    } else {
+
+    } else { // Condicional para pines no especificados
       imprimirSerial("Pin " + String(pinNames[i]) + " no especificado", 'y');
     }
   }
@@ -39,12 +57,8 @@ void Hardware::tarjetaNueva() {
     tarjeta.Pantalla = false;
     tarjeta.UART = true;
     tarjeta.I2C = false;
-    tarjeta.PinesGPIO[0] = 0;
-    tarjeta.PinesGPIO[1] = 0;
-    tarjeta.PinesGPIO[2] = 0;
-    tarjeta.PinesGPIO[3] = 0;
-    tarjeta.PinesGPIO[4] = 0;
-    tarjeta.PinesGPIO[5] = 0;
+    strcpy(tarjeta.PinesGPIO, "IIIIII");
+    strcpy(tarjeta.FlancosGPIO, "NNNNNN");
 
     ManejoEEPROM::guardarTarjetaConfigEEPROM();
 

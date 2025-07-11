@@ -1,5 +1,6 @@
 #ifndef CONFIG_H
-#define CONFIG_H
+    #define CONFIG_H
+    
     #include <Arduino.h>
     #include <SPI.h>
     #include <RadioLib.h>

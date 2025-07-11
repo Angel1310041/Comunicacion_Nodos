@@ -16,6 +16,8 @@ void ManejoEEPROM::leerTarjetaEEPROM() {
   tarjeta.I2C = eeprom.getBool("I2C");
   String GPIOS = eeprom.getString("PinesGPIO");
   strcpy(tarjeta.PinesGPIO, GPIOS.c_str());
+  String FLANCOS = eeprom.getString("FlancosGPIO");
+  strcpy(tarjeta.FlancosGPIO, FLANCOS.c_str());
   eeprom.end();
 }
 
@@ -28,6 +30,7 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
   eeprom.putBool("UART", tarjeta.UART);
   eeprom.putBool("I2C", tarjeta.I2C);
   eeprom.putString("PinesGPIO", tarjeta.PinesGPIO);
+  eeprom.putString("FlancosGPIO", tarjeta.FlancosGPIO);
   eeprom.end();
 
   imprimirSerial("Configuracion guardada: ");
