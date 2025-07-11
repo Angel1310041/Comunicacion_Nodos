@@ -6,7 +6,7 @@
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-String Version = "1.1.2.5";
+String Version = "1.2.1.1";
 volatile bool receivedFlag = false;
 #define MSG_ID_BUFFER_SIZE 16
 String msgIdBuffer[MSG_ID_BUFFER_SIZE];
@@ -87,9 +87,7 @@ void loop() {
       String destino = input.substring(0, sep);
       String mensaje = input.substring(sep + 1);
 
-      // Compara destino (string) con configLora.IDLora (char[])
       if (strcmp(destino.c_str(), configLora.IDLora) != 0 && mensaje.length() > 0) {
-        // Para IDs alfanuméricos, siguienteHop será igual al destino (o puedes implementar lógica de routing avanzada)
         String siguienteHop = destino;
 
         String msgID = generarMsgID();
