@@ -1,0 +1,1 @@
+En la rama principal ya me permite filtrar los mensajes y tambien puedo guardar el ID con caracteres, permite 3 
