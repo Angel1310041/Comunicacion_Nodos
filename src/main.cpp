@@ -1,7 +1,7 @@
 #include "config.h"
 #include "hardware.h"
 
-String Version = "1.1.2.2";
+String Version = "1.3.0.1";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 

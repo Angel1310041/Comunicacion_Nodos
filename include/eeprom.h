@@ -20,8 +20,6 @@
 
     class ManejoEEPROM {
         public:
-            static void inicializar();
-
             // Lectura de la EEPROM
             static void leerTarjetaEEPROM();
 

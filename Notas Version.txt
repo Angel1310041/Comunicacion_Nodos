@@ -1,0 +1,16 @@
+> Notas Versión 1.3.0
+
+[ ] Agregar un scanner I2C como función nativa
+[ ] Agregar una interfaz HTML para interactuar con los valores de la memoria EEPROM
+
+____________________________________________________________________________________
+
+<<< Nomenclatura: >>>
+{
+  [ ] Pendiente
+  [-] Cancelado
+  [/] En progreso
+  [X] Completado
+  |-> Pasos para resolver el problema
+  !-> Error encontrado en el proceso
+}
