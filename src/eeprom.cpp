@@ -14,6 +14,7 @@ void ManejoEEPROM::leerTarjetaEEPROM() {
   tarjeta.Pantalla = eeprom.getBool("Pantalla");
   tarjeta.UART = eeprom.getBool("UART");
   tarjeta.I2C = eeprom.getBool("I2C");
+  tarjeta.WiFi = eeprom.getBool("WiFi");
   String GPIOS = eeprom.getString("PinesGPIO");
   strcpy(tarjeta.PinesGPIO, GPIOS.c_str());
   String FLANCOS = eeprom.getString("FlancosGPIO");
@@ -29,6 +30,7 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
   eeprom.putBool("Pantalla", tarjeta.Pantalla);
   eeprom.putBool("UART", tarjeta.UART);
   eeprom.putBool("I2C", tarjeta.I2C);
+  eeprom.putBool("WiFi", tarjeta.WiFi);
   eeprom.putString("PinesGPIO", tarjeta.PinesGPIO);
   eeprom.putString("FlancosGPIO", tarjeta.FlancosGPIO);
   eeprom.end();
@@ -48,5 +50,27 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
     } else {
       imprimirSerial("\tPin " + String(pinNames[i]) + " no especificado", 'y');
     }
+  }
+}
+
+void ManejoEEPROM::tarjetaNueva() {
+  ManejoEEPROM::leerTarjetaEEPROM();
+  if (tarjeta.magic != 0xDEADBEEF) {
+    imprimirSerial("Esta tarjeta es nueva, comenzando formateo...", 'c');
+    tarjeta.magic = 0xDEADBEEF;
+    strcpy(tarjeta.IDLora, "001");
+    tarjeta.Canal = 1;
+    tarjeta.Pantalla = false;
+    tarjeta.UART = true;
+    tarjeta.I2C = false;
+    strcpy(tarjeta.PinesGPIO, "IIIIII");
+    strcpy(tarjeta.FlancosGPIO, "NNNNNN");
+
+    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+
+    imprimirSerial("\n\t\t\t<<< Tarjeta formateada correctamente >>>", 'g');
+    imprimirSerial("Version de la tarjeta: " + Version);
+  } else {
+    imprimirSerial("\n\t\t\t<<< Tarjeta formateada lista para utilizarse >>>", 'y');
   }
 }

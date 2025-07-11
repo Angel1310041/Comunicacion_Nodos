@@ -9,11 +9,18 @@
     bool Pantalla;
     bool UART;
     bool I2C;
+    bool WiFi;
     char PinesGPIO[6];
     char FlancosGPIO[6];
   };
 
+  struct Network {
+    char ssid[32];
+    char password[32];
+  };
+
   extern LoRaMem tarjeta;
+  extern Network redes[3];
 
   /*
   tarjeta.PinesGPIO -> 'I' = Inhabilitado, 'E' = Entrada, 'S' = Salida
@@ -27,6 +34,7 @@
 
       // Escritura de la EEPROM
       static void guardarTarjetaConfigEEPROM();
+      static void tarjetaNueva();
   };
 
 #endif

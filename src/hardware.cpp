@@ -8,7 +8,7 @@ const int pinNumbers[6] = {PIN_IO1, PIN_IO2, PIN_IO3, PIN_IO4, PIN_IO5, PIN_IO6}
 const char* pinNames[6] = {"IO1", "IO2", "IO3", "IO4", "IO5", "IO6"};
 
 void Hardware::inicializar() {
-  Hardware::tarjetaNueva();
+  ManejoEEPROM::tarjetaNueva();
   pinMode(LED_STATUS, OUTPUT);
   pinMode(TEST_IN, INPUT);
   Hardware::configurarPinesGPIO(tarjeta.PinesGPIO, tarjeta.FlancosGPIO);
@@ -44,28 +44,6 @@ void Hardware::configurarPinesGPIO(char PinesGPIO[6], char Flancos[6]) {
     } else { // Condicional para pines no especificados
       imprimirSerial("Pin " + String(pinNames[i]) + " no especificado", 'y');
     }
-  }
-}
-
-void Hardware::tarjetaNueva() {
-  ManejoEEPROM::leerTarjetaEEPROM();
-  if (tarjeta.magic != 0xDEADBEEF) {
-    imprimirSerial("Esta tarjeta es nueva, comenzando formateo...", 'c');
-    tarjeta.magic = 0xDEADBEEF;
-    strcpy(tarjeta.IDLora, "001");
-    tarjeta.Canal = 1;
-    tarjeta.Pantalla = false;
-    tarjeta.UART = true;
-    tarjeta.I2C = false;
-    strcpy(tarjeta.PinesGPIO, "IIIIII");
-    strcpy(tarjeta.FlancosGPIO, "NNNNNN");
-
-    ManejoEEPROM::guardarTarjetaConfigEEPROM();
-
-    imprimirSerial("\n\t\t\t<<< Tarjeta formateada correctamente >>>", 'g');
-    imprimirSerial("Version de la tarjeta: " + Version);
-  } else {
-    imprimirSerial("\n\t\t\t<<< Tarjeta formateada lista para utilizarse >>>", 'y');
   }
 }
 

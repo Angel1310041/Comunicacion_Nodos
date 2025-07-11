@@ -2,6 +2,13 @@
 
 [ ] Agregar un scanner I2C como función nativa
 [ ] Agregar una interfaz HTML para interactuar con los valores de la memoria EEPROM
+[ ] Tener la opción de WiFi en la LoRa para recibir comandos y realizar un Heartbeath para ubicar las LoRas funcionales
+[ ] Condicionales de uso con parámetros y salidas personalizados con los pines programables
+  |-> Hacer un archivo en SPIFFS que almacene los condicionales y salidas personalizados
+[ ] Hacer la lista de comandos para la LoRa
+[ ] Hacer función para procesado de comandos, recibids desde cualquier fuente
+[ ] Hacer una función para recibir comandos de la Alarma Vecinal
+[ ] Hacer una función para enviar comandos a la Alarma Vecinal
 
 ____________________________________________________________________________________
 

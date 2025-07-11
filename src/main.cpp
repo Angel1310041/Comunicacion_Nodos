@@ -1,7 +1,7 @@
 #include "config.h"
 #include "hardware.h"
 
-String Version = "1.3.0.1";
+String Version = "1.3.2.0";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
@@ -25,7 +25,7 @@ void imprimirSerial(String mensaje, char color) {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(1000);
 
   if (lora.begin() != RADIOLIB_ERR_NONE) {
