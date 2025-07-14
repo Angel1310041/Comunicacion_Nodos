@@ -4,7 +4,7 @@
 #include "comunicacion.h"
 #include "interfaz.h"
 
-String Version = "1.4.0.13";
+String Version = "1.4.1.5";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
@@ -61,8 +61,6 @@ void recibirComandoSerial(void *pvParameters) {
       ultimoComandoRecibido = comandoSerial;
     } else if (comandoSerial == ultimoComandoRecibido) {
       comandoSerial = "";
-    } else {
-      imprimirSerial("Comando vacio");
     }
     esp_task_wdt_reset();
     vTaskDelay(5000);

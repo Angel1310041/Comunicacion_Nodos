@@ -43,15 +43,16 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
   imprimirSerial("ID: " + String(tarjeta.IDLora));
   imprimirSerial("Canal: " + String(tarjeta.Canal));
   imprimirSerial("Pantalla: " + String(tarjeta.Pantalla));
+  imprimirSerial("WiFi: " + String(tarjeta.WiFi));
   imprimirSerial("UART: " + String(tarjeta.UART));
   imprimirSerial("DEBUG: " + String(tarjeta.DEBUG));
   imprimirSerial("I2C: " + String(tarjeta.I2C));
 
   for (int i = 0; i < 6; ++i) {
     if (tarjeta.PinesGPIO[i] == 1) {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como entrada", 'b');
+      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como entrada", 'c');
     } else if (tarjeta.PinesGPIO[i] == 2) {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como salida", 'b');
+      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como salida", 'c');
     } else {
       imprimirSerial("\tPin " + String(pinNames[i]) + " no especificado", 'y');
     }
@@ -69,6 +70,7 @@ void ManejoEEPROM::tarjetaNueva() {
     tarjeta.UART = true;
     tarjeta.I2C = false;
     tarjeta.DEBUG = true;
+    tarjeta.WiFi = true;
     strcpy(tarjeta.PinesGPIO, "IIIIII");
     strcpy(tarjeta.FlancosGPIO, "NNNNNN");
 

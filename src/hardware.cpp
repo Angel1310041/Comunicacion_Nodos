@@ -1,6 +1,7 @@
 #include "config.h"
 #include "hardware.h"
 #include "eeprom.h"
+#include "comunicacion.h"
 
 // Arreglo con los números de pin fisicos
 const int pinNumbers[6] = {PIN_IO1, PIN_IO2, PIN_IO3, PIN_IO4, PIN_IO5, PIN_IO6};

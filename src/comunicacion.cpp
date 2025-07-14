@@ -35,6 +35,7 @@ String ManejoComunicacion::leerVecinal() {
       comandoVecinal = Serial2.readStringUntil('\n');
       if (comandoVecinal != "") {
         imprimirSerial("Comando recibido en Serial2: " + comandoVecinal, 'y');
+        Hardware::blinkPin(LED_STATUS, 1, 500);
         return comandoVecinal;
       } else {
         //imprimirSerial("Comando vacio");
@@ -52,6 +53,8 @@ void ManejoComunicacion::escribirVecinal(String envioVecinal) {
   if (tarjeta.UART) {
     Serial2.println(envioVecinal);
     imprimirSerial("Comando enviado a la Alarma Vecinal:\n  -> " + envioVecinal, 'g');
+  } else {
+    imprimirSerial("Comunicacion UART deshabilitada", 'y');
   }
 }
 
@@ -65,21 +68,23 @@ void ManejoComunicacion::initI2C() {
   }
 }
 
-void ManejoComunicacion::scannerI2C() {
+int ManejoComunicacion::scannerI2C() {
   byte error, address;
   int nDevices;
-  imprimirSerial("Escaneando puerto I2C...", 'y');
+  int cantI2C = 0;
+  imprimirSerial("Escaneando puerto I2C...\n", 'y');
 
   for (address = 1; address< 127; address++) {
     Wire.beginTransmission(address);
     error = Wire.endTransmission();
 
     if (error == 0) {
-      mensaje = "\nI2C encontrado en la direccion 0x";
+      mensaje = "I2C encontrado en la direccion 0x";
       if (address < 16) 
         mensaje += "0";
       mensaje += String(address, HEX);
       mensaje += " !";
+      cantI2C += 1;
       imprimirSerial(mensaje, 'c');
       nDevices++;
     } else if (error == 4) {
@@ -92,10 +97,13 @@ void ManejoComunicacion::scannerI2C() {
     delay(5);
   }
 
-  if (nDevices == 0)
+  if (nDevices == 0) {
     imprimirSerial("Ningun dispositivo I2C encontrado", 'r');
-  else
-    imprimirSerial("\nEscaneo completado", 'g');
+    return cantI2C;
+  } else {
+    imprimirSerial("\nEscaneo completado!", 'g');
+    return cantI2C;
+  }
 }
 
 String ManejoComunicacion::leerSerial() {
@@ -104,6 +112,7 @@ String ManejoComunicacion::leerSerial() {
     comandoVecinal = Serial.readStringUntil('\n');
     if (comandoVecinal != "") {
       imprimirSerial("Comando recibido en Serial: " + comandoVecinal, 'y');
+      Hardware::blinkPin(LED_STATUS, 1, 500);
       return comandoVecinal;
     }
   }
@@ -117,10 +126,12 @@ void ManejoComunicacion::envioMsjLoRa(String comandoLoRa) {
 
 void ManejoComunicacion::procesarComando(String comandoRecibido) {
   esp_task_wdt_reset();
-  String IDLora = comandoRecibido.substring(0, 3);
+  //String IDLora = comandoRecibido.substring(0, 3);
   int primerSep = comandoRecibido.indexOf('@');
   int segundoSep = comandoRecibido.indexOf('@', primerSep + 1);
   int tercerSep = comandoRecibido.indexOf('@', segundoSep + 1);
+  String IDLora = comandoRecibido.substring(0, primerSep);
+  String destino = comandoRecibido.substring(primerSep + 1, segundoSep);
   String comandoProcesar = comandoRecibido.substring(segundoSep + 1, tercerSep);
   String prefix1 = "";
   String prefix2 = "";
@@ -137,7 +148,7 @@ void ManejoComunicacion::procesarComando(String comandoRecibido) {
   imprimirSerial("\nComando recibido en procesado de comando: " + comandoRecibido);
   imprimirSerial("\nComando a Procesar -> " + comandoProcesar);
 
-  if (IDLora == String(tarjeta.IDLora) && comandoRecibido.substring(4, 5) == "L") {
+  if (IDLora == String(tarjeta.IDLora) && /*comandoRecibido.substring(4, 5)*/ destino == "L") {
     if (comandoProcesar.startsWith("ID")) {
       // Ejemplo: IDC>AD9 / IDL
       accion = comandoProcesar.substring(2, 3);
@@ -146,8 +157,37 @@ void ManejoComunicacion::procesarComando(String comandoRecibido) {
       } else if (accion == "C") {
         prefix1 = comandoProcesar.substring(4, 7);
         imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
-        ManejoEEPROM::guardarTarjetaConfigEEPROM();
         strcpy(tarjeta.IDLora, prefix1.c_str());
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+      }
+
+    } else if (comandoProcesar.startsWith("CH")) {
+      // Ejemplo: CHL>1 / CHC>2
+      accion = comandoProcesar.substring(3, 4);
+      if (accion == "L") {
+        imprimirSerial("El canal del nodo es -> " + String(tarjeta.Canal), 'y');
+      } else if (accion == "C") {
+        prefix1 = comandoProcesar.substring(4, 5);
+        imprimirSerial("Cambiando el canal del nodo a -> " + prefix1, 'c');
+        tarjeta.Canal = prefix1.toInt();
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+      }
+
+    } else if (comandoProcesar.startsWith("SCR")) {
+      // Ejemplo: SCR>L / SCR>1/0
+      accion = comandoProcesar.substring(4, 5);
+      if (accion == "L") {
+        mensaje = "La pantalla de la LoRa se encuentra ";
+        mensaje += tarjeta.Pantalla ? "Activada" : "Desactivada";
+        imprimirSerial(mensaje);
+      } else if (accion == "0") {
+        imprimirSerial("Desactivando la pantalla");
+        tarjeta.Pantalla = false;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+      } else if (accion == "1") {
+        imprimirSerial("Activando la pantalla");
+        tarjeta.Pantalla = true;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
       }
 
     } else if (comandoProcesar.startsWith("I2C")) {
@@ -171,12 +211,60 @@ void ManejoComunicacion::procesarComando(String comandoRecibido) {
     } else if (comandoProcesar.startsWith("SCANI2C")) {
       if (tarjeta.I2C) { 
         imprimirSerial("Escaneando el puerto I2C en busca de dispositivos...", 'y');
-        ManejoComunicacion::scannerI2C();
+        imprimirSerial("Se encontraron " + String(ManejoComunicacion::scannerI2C()) + " direcciones I2C");
       } else {
         imprimirSerial("La comunicacion I2C esta desactivada, no se puede escanear", 'r');
       }
+    
+    } else if (comandoProcesar.startsWith("UART")) {
+      // Ejemplo: UART>L / UART>1/0
+      accion = comandoProcesar.substring(5, 6);
+      if (accion == "L") {
+        mensaje = "La comunicacion UART se encuentra ";
+        mensaje += tarjeta.UART ? "Activada" : "Desactivada";
+        imprimirSerial(mensaje);
+      } else if (accion == "0") {
+        imprimirSerial("Desactivando la comunicacion UART");
+        tarjeta.UART = false;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+      } else if (accion == "1") {
+        imprimirSerial("Activando la comunicacion UART");
+        tarjeta.UART = true;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+        ManejoComunicacion::initUART();
+      }
+
+    } else if (comandoProcesar.startsWith("WIFI")) {
+      // Ejemplo: WIFI>L WIFI>1/0
+      accion = comandoProcesar.substring(5, 6);
+      if (accion == "L") {
+        mensaje = "La conexion WiFi se encuentra ";
+        mensaje += tarjeta.WiFi ? "Activada" : "Desactivada";
+        imprimirSerial(mensaje);
+      } else if (accion == "0") {
+        imprimirSerial("Desactivando la comunicacion WiFi");
+        tarjeta.WiFi = false;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+      } else if (accion == "1") {
+        imprimirSerial("Activando la comunicacion WiFi");
+        tarjeta.WiFi = true;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+        // Colocar la funcion de conexion a redes existentes
+      }
+
+    } else if (comandoProcesar.startsWith("RESET")) {
+      imprimirSerial("Reiniciando la tarjeta LoRa...");
+      delay(1000);
+      ESP.restart();
+
+    } else if (comandoProcesar.startsWith("MPROG")) {
+      imprimirSerial("Entrando a modo programacion a traves de comando...");
+      if (!modoProgramacion) {
+        Interfaz::entrarModoProgramacion();
+      }
     }
-  } else if (IDLora == String(tarjeta.IDLora) && comandoRecibido.substring(4, 5) == "V") {
+
+  } else if (IDLora == String(tarjeta.IDLora) && /*comandoRecibido.substring(4, 5)*/destino == "V") {
     ManejoComunicacion::escribirVecinal(comandoRecibido);
   } else {
     imprimirSerial("Reenviando comando al nodo con el ID " + IDLora);
@@ -205,6 +293,10 @@ void ManejoComunicacion::procesarComando(String comandoRecibido) {
     |-> OK-SCANI2C># Cantidad de dispositivos encontrados
   - WIFI>L/1/0 = Habilitar, deshabilitar o leer el estado de la conexión WiFi
     |-> OK-WIFI>1/0
+  - RESET = Reiniciar la tarjeta LoRa
+    |-> OK-RESET
+  - MPROG = Entra a modo programacion
+    |-> OK-MPROG
   - GPIO>1EA1A = Configurar un pin GPIO como entrada con flanco ascendente o descendente, número de condicional y parámetro de condición
          ^^^^^^
         # PIn | Entrada | Flanco | Condicion | Parametro

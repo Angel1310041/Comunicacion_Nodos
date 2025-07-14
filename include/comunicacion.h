@@ -9,7 +9,7 @@
       static String leerVecinal();
       static void initI2C();
       static void initUART();
-      static void scannerI2C();
+      static int scannerI2C();
       static void escribirVecinal(String envioVecinal);
       static void procesarComando(String comandoRecibido);
       static void envioMsjLoRa(String comandoLoRa);
