@@ -1,7 +1,8 @@
 #include <Arduino.h>
 #include "config.h"
 #include "eeprom.h"
-LoRaConfig configLora;
+
+extern LoRaConfig configLora;
 Preferences preferences;
 
 float canales[9] = {

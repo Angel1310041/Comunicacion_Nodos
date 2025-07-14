@@ -1,7 +1,14 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <Preferences.h>
+  #include <Arduino.h>
+  #include <SPI.h>
+  #include <RadioLib.h>
+  #include <heltec.h>
+  #include <Preferences.h>
+  #include <Wire.h>
+  #include <esp_task_wdt.h>
+
 
 #define LORA_MOSI 10
 #define LORA_MISO 11
@@ -11,14 +18,14 @@
 #define LORA_DIO1 14
 #define LORA_BUSY 13
 
-#define PIN_IO0 1
-#define PIN_IO1 2
-#define PIN_IO2 3
-#define PIN_IO3 4
-#define PIN_IO4 5
-#define PIN_IO5 6
-#define PIN_IO6 7
-#define LED_PIN 35
+  #define TEST_IN 1
+  #define PIN_IO1 2
+  #define PIN_IO2 3
+  #define PIN_IO3 4
+  #define PIN_IO4 5
+  #define PIN_IO5 6
+  #define PIN_IO6 7
+  #define LED_STATUS 35
 
 #define UART_RX 46
 #define UART_TX 45
@@ -28,17 +35,7 @@
 
 #define MSG_ID_BUFFER_SIZE 16
 
-struct LoRaConfig {
-  char IDLora[4];
-  int Canal;
-  bool Pantalla;
-  bool displayOn; 
-  bool UART;
-  bool I2C;
-  char Pines[6];
-};
 
-extern LoRaConfig configLora;
 extern Preferences preferences;
 extern float canales[9];
 
@@ -47,5 +44,20 @@ void cargarConfig();
 void borrarConfig();
 void pedirID();
 void pedirCanal();
+
+  extern const int EEPROM_SIZE;
+  extern String Version;
+  extern const int pinNumbers[6];
+  extern const char* pinNames[6];
+
+  extern SX1262 lora;
+  extern TwoWire I2CGral;
+
+  extern bool modoProgramacion;
+  extern String ultimoComandoRecibido;
+  extern String mensaje;
+
+  void imprimirSerial(String mensaje, char color = 'w');
+
 
 #endif

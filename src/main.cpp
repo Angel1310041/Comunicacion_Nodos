@@ -6,11 +6,15 @@
 #include "pantalla.h"
 #include "comunicacion.h"
 #include "eeprom.h"
-
+#include "hardware.h"
+// --- Variables globales ---
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 bool tieneInternet = true; // Pon true en la placa que tiene internet
-String Version = "1.2.2.2";
+String Version = "1.2.2.4";
 volatile bool receivedFlag = false;
+bool modoProgramacion = false;
+TaskHandle_t tareaComandosSerial = NULL;
+extern String ultimoComandoRecibido; // Definida en comunicacion.cpp
 
 #define MSG_ID_BUFFER_SIZE 16
 String msgIdBuffer[MSG_ID_BUFFER_SIZE];
@@ -19,6 +23,24 @@ int msgIdBufferIndex = 0;
 #define MAX_NODOS_ACTIVOS 32
 String nodosActivos[MAX_NODOS_ACTIVOS];
 int numNodosActivos = 0;
+
+// --- Utilidades de impresión con color ---
+void imprimirSerial(String mensaje, char color) {
+  String colorCode;
+  switch (color) {
+    case 'r': colorCode = "\033[31m"; break; // Rojo
+    case 'g': colorCode = "\033[32m"; break; // Verde
+    case 'b': colorCode = "\033[34m"; break; // Azul
+    case 'y': colorCode = "\033[33m"; break; // Amarillo
+    case 'c': colorCode = "\033[36m"; break; // Cian
+    case 'm': colorCode = "\033[35m"; break; // Magenta
+    case 'w': colorCode = "\033[37m"; break; // Blanco
+    default: colorCode = "\033[0m"; // Sin color
+  }
+  Serial.print(colorCode);
+  Serial.println(mensaje);
+  Serial.print("\033[0m"); // Resetear color
+}
 
 // --- Utilidades para nodos activos y mensajes ---
 void agregarNodoActivo(const String& id) {
@@ -58,59 +80,123 @@ void enviarMensaje(const String& destino, const char* mensaje) {
         char paquete[256];
         snprintf(paquete, sizeof(paquete), "ORIG:%s|DEST:%s|MSG:%s|HOP:%s|CANAL:%d|ID:%s",
             configLora.IDLora, destino.c_str(), mensaje, siguienteHop.c_str(), configLora.Canal, msgID.c_str());
-        Serial.println("Enviando a HOP:" + siguienteHop + " por canal " + String(configLora.Canal));
+        imprimirSerial("Enviando a HOP:" + siguienteHop + " por canal " + String(configLora.Canal), 'c');
         mostrarMensaje("Enviando...", "A HOP: " + siguienteHop, 0);
         lora.standby();
         int resultado = lora.transmit(paquete);
         if (resultado == RADIOLIB_ERR_NONE) {
-            Serial.println("Mensaje enviado correctamente.");
-            digitalWrite(LED_PIN, HIGH); delay(100); digitalWrite(LED_PIN, LOW);
+            imprimirSerial("Mensaje enviado correctamente.", 'g');
+            digitalWrite(LED_STATUS, HIGH); delay(100); digitalWrite(LED_STATUS, LOW);
             guardarMsgID(msgID); mostrarMensajeEnviado(destino, mensaje);
         } else {
-            Serial.println("Error al enviar: " + String(resultado));
+            imprimirSerial("Error al enviar: " + String(resultado), 'r');
             mostrarError("Error al enviar: " + String(resultado));
         }
         lora.startReceive();
     } else {
-        Serial.println("Destino inválido o mensaje vacío.");
+        imprimirSerial("Destino inválido o mensaje vacío.", 'y');
         mostrarInfo("Destino invalido o mensaje vacio.");
     }
 }
 
+// --- Tarea para comandos seriales (FreeRTOS) ---
+void recibirComandoSerial(void *pvParameters) {
+  imprimirSerial("Esperando comandos por Serial...", 'b');
+  tareaComandosSerial = xTaskGetCurrentTaskHandle();
+  String comandoSerial = "";
+
+  while (true) {
+    if (Serial.available()) {
+      comandoSerial = Serial.readStringUntil('\n');
+      comandoSerial.trim();
+      if (!comandoSerial.isEmpty()) {
+        // Procesamiento de comandos
+        if (comandoSerial.equalsIgnoreCase("RESET")) {
+          borrarConfig(); mostrarInfo("Configuracion borrada. Reinicia."); 
+        } else if (comandoSerial.equalsIgnoreCase("DISPLAY ON")) {
+          configurarDisplay(true); imprimirSerial("Comando: DISPLAY ON - Display habilitado.", 'g');
+        } else if (comandoSerial.equalsIgnoreCase("DISPLAY OFF")) {
+          configurarDisplay(false); imprimirSerial("Comando: DISPLAY OFF - Display deshabilitado.", 'y');
+        } else if (comandoSerial.equalsIgnoreCase("SONDEO")) {
+          if (tieneInternet) {
+            limpiarNodosActivos(); enviarSondeo();
+            imprimirSerial("Sondeo manual iniciado...", 'c');
+          } else imprimirSerial("Esta placa no tiene internet, no puede hacer sondeo.", 'y');
+        } else {
+          // Envío de mensajes
+          int sep = comandoSerial.indexOf('|');
+          if (sep > 0) {
+            String destino = comandoSerial.substring(0, sep);
+            char mensaje[201];
+            comandoSerial.substring(sep + 1).toCharArray(mensaje, sizeof(mensaje));
+            enviarMensaje(destino, mensaje);
+          } else {
+            imprimirSerial("Formato inválido. Usa: ID_DESTINO|mensaje", 'r');
+            mostrarInfo("Formato invalido. Usa: ID|mensaje");
+          }
+        }
+        ultimoComandoRecibido = comandoSerial;
+      }
+    }
+    esp_task_wdt_reset();
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+  vTaskDelete(NULL);
+}
+
 // --- SETUP ---
 void setup() {
+    configLora.DEBUG = true; // Habilitar debug por defecto
     Serial.begin(9600);
-    Heltec.begin(false, false, true);
-    inicializarPantalla();
     delay(1000);
 
+    Heltec.begin(false, false, true);
+    inicializarPantalla();
+
+      Hardware::inicializar();
+  ManejoComunicacion::inicializar();
     cargarConfig();
     configurarDisplay(configLora.displayOn);
 
     if (strlen(configLora.IDLora) == 0) { pedirID(); guardarConfig(); }
-    else { Serial.println("ID cargado de memoria: " + String(configLora.IDLora)); mostrarInfo("ID cargado: " + String(configLora.IDLora)); }
+    else { imprimirSerial("ID cargado de memoria: " + String(configLora.IDLora), 'g'); mostrarInfo("ID cargado: " + String(configLora.IDLora)); }
 
     if (configLora.Canal < 0 || configLora.Canal > 8) { pedirCanal(); guardarConfig(); }
-    else { Serial.println("Canal cargado de memoria: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)"); mostrarInfo("Canal cargado: " + String(configLora.Canal)); }
+    else { imprimirSerial("Canal cargado de memoria: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)", 'g'); mostrarInfo("Canal cargado: " + String(configLora.Canal)); }
 
     if (lora.begin(canales[configLora.Canal]) != RADIOLIB_ERR_NONE) {
-        Serial.println("LoRa init failed!"); mostrarError("LoRa init failed!"); while (true);
+        imprimirSerial("LoRa init failed!", 'r'); mostrarError("LoRa init failed!"); while (true);
     }
 
     lora.setDio1Action(setFlag);
     lora.startReceive();
-    pinMode(LED_PIN, OUTPUT);
+    pinMode(LED_STATUS, OUTPUT);
 
-    Serial.println("LoRa ready.");
-    Serial.println("ID de este nodo: " + String(configLora.IDLora));
-    Serial.println("Canal: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)");
-    Serial.println("Escribe en el formato: ID_DESTINO|mensaje");
-    Serial.println("Para borrar la configuración y reconfigurar, escribe: RESET");
-    Serial.println("Para habilitar el display: DISPLAY ON");
-    Serial.println("Para deshabilitar el display: DISPLAY OFF");
-    Serial.println("Version:" + Version);
+    imprimirSerial("LoRa ready.", 'g');
+    imprimirSerial("ID de este nodo: " + String(configLora.IDLora), 'c');
+    imprimirSerial("Canal: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)", 'c');
+    imprimirSerial("Escribe en el formato: ID_DESTINO|mensaje", 'y');
+    imprimirSerial("Para borrar la configuración y reconfigurar, escribe: RESET", 'y');
+    imprimirSerial("Para habilitar el display: DISPLAY ON", 'y');
+    imprimirSerial("Para deshabilitar el display: DISPLAY OFF", 'y');
+    imprimirSerial("Version:" + Version, 'm');
 
     mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
+
+    // Iniciar tarea de comandos seriales si está en modo debug y no en modo programación
+    if (!modoProgramacion && tareaComandosSerial == NULL && configLora.DEBUG) {
+      imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
+      xTaskCreatePinnedToCore(
+        recibirComandoSerial,
+        "Comandos Seriales",
+        5120,
+        NULL,
+        1,
+        &tareaComandosSerial,
+        0
+      );
+      imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
+    }
 }
 
 // --- LOOP ---
@@ -125,55 +211,26 @@ void loop() {
             ultimoSondeo = millis(); tiempoMostrar = millis(); esperandoMostrar = true;
         }
         if (esperandoMostrar && millis() - tiempoMostrar > 5000) {
-            Serial.println("IDs de nodos activos detectados:");
-            for (int i = 0; i < numNodosActivos; i++) Serial.println(nodosActivos[i]);
+            mostrarNodosActivos();
             esperandoMostrar = false; sondeoManual = false;
         }
     }
 
-    // Comandos por Serial
-    if (Serial.available()) {
-        String input = Serial.readStringUntil('\n'); input.trim();
-        if (input.equalsIgnoreCase("RESET")) { borrarConfig(); mostrarInfo("Configuracion borrada. Reinicia."); return; }
-        if (input.equalsIgnoreCase("DISPLAY ON")) { configurarDisplay(true); Serial.println("Comando: DISPLAY ON - Display habilitado."); return; }
-        if (input.equalsIgnoreCase("DISPLAY OFF")) { configurarDisplay(false); Serial.println("Comando: DISPLAY OFF - Display deshabilitado."); return; }
-        if (input.equalsIgnoreCase("SONDEO")) {
-            if (tieneInternet) {
-                limpiarNodosActivos(); enviarSondeo();
-                tiempoMostrar = millis(); esperandoMostrar = true; sondeoManual = true;
-                Serial.println("Sondeo manual iniciado...");
-            } else Serial.println("Esta placa no tiene internet, no puede hacer sondeo.");
-            return;
-        }
-
-        // Envío de mensajes
-        int sep = input.indexOf('|');
-        if (sep > 0) {
-            String destino = input.substring(0, sep);
-            char mensaje[201];
-            input.substring(sep + 1).toCharArray(mensaje, sizeof(mensaje));
-            enviarMensaje(destino, mensaje);
-        } else {
-            Serial.println("Formato inválido. Usa: ID_DESTINO|mensaje");
-            mostrarInfo("Formato invalido. Usa: ID|mensaje");
-        }
-    }
-
-    // Recepción de mensajes
+    // Recepción de mensajes LoRa
     if (receivedFlag) {
         receivedFlag = false;
         String msg;
         int state = lora.readData(msg);
         if (state == RADIOLIB_ERR_NONE) {
             responderSondeo(msg);
-            Serial.println("Recibido: " + msg);
+            imprimirSerial("Recibido: " + msg, 'b');
             if (tieneInternet && msg.startsWith("RESPUESTA|ID:")) {
                 int idxIni = msg.indexOf("RESPUESTA|ID:") + 13, idxFin = msg.indexOf("|CANAL:");
                 if (idxIni != -1 && idxFin != -1 && idxFin > idxIni) {
                     String idNodo = msg.substring(idxIni, idxFin);
                     if (idNodo != String(configLora.IDLora)) {
                         agregarNodoActivo(idNodo);
-                        Serial.println("Nodo activo detectado: " + idNodo);
+                        imprimirSerial("Nodo activo detectado: " + idNodo, 'g');
                     }
                 }
             }
@@ -195,17 +252,17 @@ void loop() {
 
                 // --- Procesa comandos recibidos SOLO si el mensaje es para este nodo ---
                 if (strcmp(dest.c_str(), configLora.IDLora) == 0) {
-                    digitalWrite(LED_PIN, HIGH); delay(100); digitalWrite(LED_PIN, LOW);
+                    digitalWrite(LED_STATUS, HIGH); delay(100); digitalWrite(LED_STATUS, LOW);
 
                     if (cuerpo.equalsIgnoreCase("DISPLAY ON")) {
                         configurarDisplay(true);
-                        Serial.println("Comando recibido: DISPLAY ON");
+                        imprimirSerial("Comando recibido: DISPLAY ON", 'g');
                     } else if (cuerpo.equalsIgnoreCase("DISPLAY OFF")) {
                         configurarDisplay(false);
-                        Serial.println("Comando recibido: DISPLAY OFF");
+                        imprimirSerial("Comando recibido: DISPLAY OFF", 'y');
                     } else if (cuerpo.equalsIgnoreCase("RESET")) {
                         borrarConfig();
-                        Serial.println("Comando recibido: RESET. Configuración borrada, reinicia el nodo.");
+                        imprimirSerial("Comando recibido: RESET. Configuración borrada, reinicia el nodo.", 'r');
                         mostrarInfo("Configuración borrada. Reinicia.");
                     } else {
                         mostrarMensajeRecibido(orig, cuerpo); 
@@ -224,4 +281,5 @@ void loop() {
         lora.startReceive();
         mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
     }
+    delay(100); // Pequeño delay para evitar saturar el loop
 }

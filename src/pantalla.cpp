@@ -1,6 +1,8 @@
 #include "pantalla.h"
 #include "OLEDDisplayFonts.h"
 #include "config.h"
+#include "eeprom.h"
+
 bool displayActivo = true; // Initialize display as active by default
 
 void inicializarPantalla() {
