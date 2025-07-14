@@ -207,9 +207,8 @@ void loop() {
                         borrarConfig();
                         Serial.println("Comando recibido: RESET. Configuración borrada, reinicia el nodo.");
                         mostrarInfo("Configuración borrada. Reinicia.");
-                        // ESP.restart(); // Descomenta si quieres reinicio automático
                     } else {
-                        mostrarMensajeRecibido(orig, cuerpo); // Mensaje normal
+                        mostrarMensajeRecibido(orig, cuerpo); 
                     }
                 }
                 // --- Reenvío si soy hop ---
