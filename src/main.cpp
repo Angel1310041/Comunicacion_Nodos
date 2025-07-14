@@ -1,11 +1,17 @@
 #include "config.h"
 #include "hardware.h"
+#include "eeprom.h"
+#include "comunicacion.h"
+#include "interfaz.h"
 
-String Version = "1.3.2.0";
+String Version = "1.4.0.12";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-const int nodeID = 3;  // ⚠️ CAMBIA ESTE VALOR EN CADA PLACA
+String mensaje = "";
+bool modoProgramacion = false;
+
+TaskHandle_t tareaComandosSerial;
 
 void imprimirSerial(String mensaje, char color) {
   String colorCode;
@@ -29,17 +35,57 @@ void setup() {
   delay(1000);
 
   if (lora.begin() != RADIOLIB_ERR_NONE) {
-    Serial.println("LoRa init failed!");
+    imprimirSerial("Inicializacion de LoRa fallida!", 'r');
     while (true);
   }
 
-  Serial.println("LoRa ready.");
-  Serial.println("ID de este nodo: " + String(nodeID));
-  Serial.println("Escribe en el formato: ID_DESTINO|mensaje");
-  Serial.println("Version:" + Version);
+  Hardware::inicializar();
+  ManejoComunicacion::inicializar();
+
+  TaskHandle_t tareaComandosSerial = NULL;
+
+  imprimirSerial("Lora iniciada correctamente\n", 'g');
+  imprimirSerial("ID de este nodo: " + String(tarjeta.IDLora));
+  imprimirSerial("Version -> " + Version);
+}
+
+void recibirComandoSerial(void *pvParameters) {
+  imprimirSerial("Esperando comandos por Serial...");
+  tareaComandosSerial = xTaskGetCurrentTaskHandle();
+  String comandoSerial = "";
+
+  while (true) {
+    comandoSerial = ManejoComunicacion::leerSerial();
+    if (!comandoSerial.isEmpty()) {
+      ManejoComunicacion::procesarComando(comandoSerial);
+      ultimoComandoRecibido = comandoSerial;
+    } else if (comandoSerial == ultimoComandoRecibido) {
+      comandoSerial = "";
+    } else {
+      imprimirSerial("Comando vacio");
+    }
+    esp_task_wdt_reset();
+    vTaskDelay(5000);
+  }
+  vTaskDelete(NULL);
 }
 
 void loop() {
+  if (!modoProgramacion && tareaComandosSerial == NULL && tarjeta.DEBUG) {
+    imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
+    xTaskCreatePinnedToCore(
+      recibirComandoSerial,
+      "Comandos Seriales",
+      5120,
+      NULL,
+      1,
+      &tareaComandosSerial,
+      0
+    );
+    imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
+  }
+
+  /*
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
     input.trim();
@@ -99,6 +145,7 @@ void loop() {
       Serial.println("No es para mí ni me toca reenviar.");
     }
   }
+  */
 
   delay(100);
 }

@@ -4,12 +4,13 @@
 
   struct LoRaMem {
     uint32_t magic;
-    char IDLora[3]; // 0 - 9 + A - Z
+    char IDLora[4]; // 0 - 9 + A - Z
     int Canal; // 9
     bool Pantalla;
     bool UART;
     bool I2C;
     bool WiFi;
+    bool DEBUG;
     char PinesGPIO[6];
     char FlancosGPIO[6];
   };

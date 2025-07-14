@@ -7,6 +7,7 @@
   #include <heltec.h>
   #include <Preferences.h>
   #include <Wire.h>
+  #include <esp_task_wdt.h>
 
   // Pines LoRa
   #define LORA_MOSI 10
@@ -34,10 +35,15 @@
 
   extern const int EEPROM_SIZE;
   extern String Version;
-  const int pinNumbers[6];
-  const char* pinNames[6];
+  extern const int pinNumbers[6];
+  extern const char* pinNames[6];
 
+  extern SX1262 lora;
   extern TwoWire I2CGral;
+
+  extern bool modoProgramacion;
+  extern String ultimoComandoRecibido;
+  extern String mensaje;
 
   void imprimirSerial(String mensaje, char color = 'w');
 

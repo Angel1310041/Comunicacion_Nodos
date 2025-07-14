@@ -4,8 +4,8 @@
 #include "hardware.h"
 #include "interfaz.h"
 
-SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 TwoWire I2CGral = TwoWire(1);
+String ultimoComandoRecibido = "";
 
 void ManejoComunicacion::inicializar() {
   Serial.begin(9600);
@@ -57,7 +57,8 @@ void ManejoComunicacion::escribirVecinal(String envioVecinal) {
 
 void ManejoComunicacion::initI2C() {
   if (tarjeta.I2C) {
-    I2CGral.begin(I2C_SDA, I2C_SCL);
+    //I2CGral.begin(I2C_SDA, I2C_SCL);
+    Wire.begin(I2C_SDA, I2C_SCL);
     imprimirSerial("I2C inicializado correctamente.", 'g');
   } else {
     imprimirSerial("I2C inhabilitado", 'y');
@@ -69,32 +70,32 @@ void ManejoComunicacion::scannerI2C() {
   int nDevices;
   imprimirSerial("Escaneando puerto I2C...", 'y');
 
-  String msjScan;
-  nDevices = 0;
   for (address = 1; address< 127; address++) {
     Wire.beginTransmission(address);
     error = Wire.endTransmission();
 
     if (error == 0) {
-      msjScan = "I2C encontrado en la direccion 0x";
+      mensaje = "\nI2C encontrado en la direccion 0x";
       if (address < 16) 
-        msjScan = "0";
-      msjScan += address, HEX;
-      msjScan += "  !";
-      imprimirSerial(msjScan);
+        mensaje += "0";
+      mensaje += String(address, HEX);
+      mensaje += "  !";
+      imprimirSerial(mensaje, 'g');
       nDevices++;
     } else if (error == 4) {
-      msjScan = "Error desconocido en la direccion 0x";
+      mensaje = "Error desconocido en la direccion 0x";
       if (address < 16)
-        msjScan += "0";
-      msjScan += address, HEX;
-      imprimirSerial(msjScan);
+        mensaje += "0";
+      mensaje += String(address, HEX);
+      imprimirSerial(mensaje, 'r');
     }
+    delay(5);
   }
+
   if (nDevices == 0)
-    imprimirSerial("Ningun dispositivo I2C encontrado", 'y');
+    imprimirSerial("Ningun dispositivo I2C encontrado", 'r');
   else
-    imprimirSerial("Escaneo completado.", 'g');
+    imprimirSerial("Escaneo completado", 'g');
 }
 
 String ManejoComunicacion::leerSerial() {
@@ -104,10 +105,124 @@ String ManejoComunicacion::leerSerial() {
     if (comandoVecinal != "") {
       imprimirSerial("Comando recibido en Serial: " + comandoVecinal, 'y');
       return comandoVecinal;
-    } else {
-      imprimirSerial("Comando vacio");
-      return "";
     }
   }
   return "";
 }
+
+void ManejoComunicacion::envioMsjLoRa(String comandoLoRa) {
+  String IDLoraRecibido = comandoLoRa.substring(0, 3); // ID del nodo LoRa
+  imprimirSerial("Enviando comando " + comandoLoRa + " a lora con el ID " + IDLoraRecibido);
+}
+
+void ManejoComunicacion::procesarComando(String comandoRecibido) {
+  esp_task_wdt_reset();
+  String IDLora = comandoRecibido.substring(0, 3);
+  int primerSep = comandoRecibido.indexOf('@');
+  int segundoSep = comandoRecibido.indexOf('@', primerSep + 1);
+  int tercerSep = comandoRecibido.indexOf('@', segundoSep + 1);
+  String comandoProcesar = comandoRecibido.substring(segundoSep + 1, tercerSep);
+  String prefix1 = "";
+  String prefix2 = "";
+  String accion = "";
+
+  if (comandoRecibido == "") {
+    //imprimirSerial("Comando vacio");
+    return;
+  } else if (comandoRecibido == ultimoComandoRecibido) {
+    imprimirSerial("Comando repetido, no se ejecutara una nueva accion\n", 'c');
+    return;
+  }
+  ultimoComandoRecibido = comandoRecibido; // Actualizar el ultimo comando
+  imprimirSerial("\nComando recibido en procesado de comando: " + comandoRecibido);
+  imprimirSerial("\nComando a Procesar -> " + comandoProcesar);
+
+  if (IDLora == String(tarjeta.IDLora) && comandoRecibido.substring(4, 5) == "L") {
+    if (comandoProcesar.startsWith("ID")) {
+      // Ejemplo: IDC>AD9 / IDL
+      accion = comandoProcesar.substring(2, 3);
+      if (accion == "L") {
+        imprimirSerial("El ID del nodo es -> " + String(tarjeta.IDLora), 'y');
+      } else if (accion == "C") {
+        prefix1 = comandoProcesar.substring(4, 7);
+        imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+        strcpy(tarjeta.IDLora, prefix1.c_str());
+      }
+
+    } else if (comandoProcesar.startsWith("I2C")) {
+      // Ejemplo: I2C>L / I2C>1/0
+      accion = comandoProcesar.substring(4, 5);
+      if (accion == "L") {
+        mensaje = "La comunicacion I2C se encuentra ";
+        mensaje += tarjeta.I2C ? "Activada" : "Desactivada";
+        imprimirSerial(mensaje);
+      } else if (accion == "0") {
+        imprimirSerial("Desactivando la comunicacion I2C", 'y');
+        tarjeta.I2C = false;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+      } else if (accion == "1") {
+        imprimirSerial("Activando la comunicacion I2C");
+        tarjeta.I2C = true;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+        ManejoComunicacion::initI2C();
+      }
+    
+    } else if (comandoProcesar.startsWith("SCANI2C")) {
+      if (tarjeta.I2C) { 
+        imprimirSerial("Escaneando el puerto I2C en busca de dispositivos...", 'y');
+        ManejoComunicacion::scannerI2C();
+      } else {
+        imprimirSerial("La comunicacion I2C esta desactivada, no se puede escanear", 'r');
+      }
+    }
+  } else if (IDLora == String(tarjeta.IDLora) && comandoRecibido.substring(4, 5) == "V") {
+    ManejoComunicacion::escribirVecinal(comandoRecibido);
+  } else {
+    imprimirSerial("Reenviando comando al nodo con el ID " + IDLora);
+    ManejoComunicacion::envioMsjLoRa(IDLora);
+  }
+}
+
+/*
+  //* <<< Comandos LoRa >>>
+
+  //* ID@&@CMD@##
+       ^^^   ^  ^
+    ID Dirigido | Separador | Vecinal/Lora | Comando | Numeros al azar
+
+  - IDC> / IDL> = Cambiar o leer el ID del Nodo LoRa
+    |-> OK-ID>###
+  - CHC> / CHL> = Cambiar o leer el canal LoRa
+    |-> OK-CH>#
+  - SCR>L/1/0 = Habilitar, deshabilitar o leer el estado de la pantalla de LoRa
+    |-> OK-SCR>1/0
+  - UART>L/1/0 = Habilitar, deshabilitar o leer el estado de la comunicación UART hacia la Alarma Vecinal
+    |-> OK-UART>1/0
+  - I2C>L/1/0 = Habilitar, deshabilitar o leer el estado del I2C
+    |-> OK-I2C>1/0
+  - SCANI2C = Escaneo de dispositivos I2C conectados
+    |-> OK-SCANI2C># Cantidad de dispositivos encontrados
+  - WIFI>L/1/0 = Habilitar, deshabilitar o leer el estado de la conexión WiFi
+    |-> OK-WIFI>1/0
+  - GPIO>1EA1A = Configurar un pin GPIO como entrada con flanco ascendente o descendente, número de condicional y parámetro de condición
+         ^^^^^^
+        # PIn | Entrada | Flanco | Condicion | Parametro
+    |-> OK-GPIO>1EA1A
+  - GPIO>3SDU = Configurar un pin GPIO como salida con flanco asendente o descendente con resultado de salida
+         ^^^^
+        # Pin | Salida | Flanco | Resultado
+    |-> OK-GPIO>3SDU
+  - COND>1AyB / COND>1L = Configurar condicional con parametros o leer la formula de un condicional
+    |-> OK-COND>1AyB
+
+                  Parametros condicion
+                        v
+                    A   B   C   D   E   F 
+                  1                       U
+                  2                       V
+  Condiciones ->  3                       W  <- Resultados
+                  4                       X
+                  5                       Y
+                  6                       Z
+*/

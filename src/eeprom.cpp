@@ -5,6 +5,8 @@ Preferences eeprom;
 const int EEPROM_SIZE = 512;
 const int DIRECCION_INICIO_CONFIG = 0;
 
+LoRaMem tarjeta;
+
 void ManejoEEPROM::leerTarjetaEEPROM() {
   eeprom.begin("EEPROM_PPAL", false);
   tarjeta.magic = eeprom.getInt("magic");
@@ -15,6 +17,7 @@ void ManejoEEPROM::leerTarjetaEEPROM() {
   tarjeta.UART = eeprom.getBool("UART");
   tarjeta.I2C = eeprom.getBool("I2C");
   tarjeta.WiFi = eeprom.getBool("WiFi");
+  tarjeta.DEBUG = eeprom.getBool("DEBUG");
   String GPIOS = eeprom.getString("PinesGPIO");
   strcpy(tarjeta.PinesGPIO, GPIOS.c_str());
   String FLANCOS = eeprom.getString("FlancosGPIO");
@@ -31,6 +34,7 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
   eeprom.putBool("UART", tarjeta.UART);
   eeprom.putBool("I2C", tarjeta.I2C);
   eeprom.putBool("WiFi", tarjeta.WiFi);
+  eeprom.putBool("DEBUG", tarjeta.DEBUG);
   eeprom.putString("PinesGPIO", tarjeta.PinesGPIO);
   eeprom.putString("FlancosGPIO", tarjeta.FlancosGPIO);
   eeprom.end();
@@ -40,6 +44,7 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
   imprimirSerial("Canal: " + String(tarjeta.Canal));
   imprimirSerial("Pantalla: " + String(tarjeta.Pantalla));
   imprimirSerial("UART: " + String(tarjeta.UART));
+  imprimirSerial("DEBUG: " + String(tarjeta.DEBUG));
   imprimirSerial("I2C: " + String(tarjeta.I2C));
 
   for (int i = 0; i < 6; ++i) {
@@ -63,6 +68,7 @@ void ManejoEEPROM::tarjetaNueva() {
     tarjeta.Pantalla = false;
     tarjeta.UART = true;
     tarjeta.I2C = false;
+    tarjeta.DEBUG = true;
     strcpy(tarjeta.PinesGPIO, "IIIIII");
     strcpy(tarjeta.FlancosGPIO, "NNNNNN");
 
@@ -71,6 +77,6 @@ void ManejoEEPROM::tarjetaNueva() {
     imprimirSerial("\n\t\t\t<<< Tarjeta formateada correctamente >>>", 'g');
     imprimirSerial("Version de la tarjeta: " + Version);
   } else {
-    imprimirSerial("\n\t\t\t<<< Tarjeta formateada lista para utilizarse >>>", 'y');
+    imprimirSerial("\n\t\t\t<<< Tarjeta lista para utilizarse >>>", 'y');
   }
 }
