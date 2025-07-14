@@ -37,7 +37,7 @@ String ManejoComunicacion::leerVecinal() {
         imprimirSerial("Comando recibido en Serial2: " + comandoVecinal, 'y');
         return comandoVecinal;
       } else {
-        imprimirSerial("Comando vacio");
+        //imprimirSerial("Comando vacio");
         return "";
       }
     }
@@ -79,8 +79,8 @@ void ManejoComunicacion::scannerI2C() {
       if (address < 16) 
         mensaje += "0";
       mensaje += String(address, HEX);
-      mensaje += "  !";
-      imprimirSerial(mensaje, 'g');
+      mensaje += " !";
+      imprimirSerial(mensaje, 'c');
       nDevices++;
     } else if (error == 4) {
       mensaje = "Error desconocido en la direccion 0x";
@@ -95,7 +95,7 @@ void ManejoComunicacion::scannerI2C() {
   if (nDevices == 0)
     imprimirSerial("Ningun dispositivo I2C encontrado", 'r');
   else
-    imprimirSerial("Escaneo completado", 'g');
+    imprimirSerial("\nEscaneo completado", 'g');
 }
 
 String ManejoComunicacion::leerSerial() {
