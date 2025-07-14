@@ -1,632 +1,771 @@
-    /* ===== General ===== */
-    body {
+/* Estilos Generales y Reseteo */
+body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
     padding: 0;
     background-color: #f4f7f6;
     color: #333;
     display: flex;
+    flex-direction: column;
     min-height: 100vh;
-    flex-direction: column; /* Changed to column to allow header to be fixed */
-    }
+}
 
-    /* ===== Header principal ===== */
-    .uno {
-    background-color: #2c3e50;
+/* Encabezado */
+.uno {
+    background-color: #5e6977;
     color: white;
     padding: 15px 20px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     position: fixed;
     width: 100%;
     top: 0;
     left: 0;
     z-index: 1000;
-    }
+    height: 60px;
+    box-sizing: border-box;
+}
 
-    /* ===== Menú hamburguesa ===== */
-    .dos {
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 3px;
-    background-color: white;
+.dos {
+    font-size: 28px;
     cursor: pointer;
-    transition: background-color 0.3s ease;
-    }
+    margin-right: 20px;
+    transition: transform 0.3s ease;
+}
 
-    .dos::before,
-    .dos::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 3px;
-    background-color: white;
-    transition: transform 0.3s ease, top 0.3s ease, background-color 0.3s ease;
-    }
+.dos.active {
+    transform: rotate(90deg);
+}
 
-    .dos::before {
-    top: -8px;
-    }
-
-    .dos::after {
-    top: 8px;
-    }
-
-    .dos:hover,
-    .dos:hover::before,
-    .dos:hover::after {
-    background-color: #ecf0f1;
-    }
-
-    /* Animación hamburguesa a "X" */
-    .cinco.active .dos { /* Targets the icon when sidebar is active */
-    background-color: transparent;
-    }
-
-    .cinco.active .dos::before {
-    transform: translateY(8px) rotate(45deg);
-    }
-
-    .cinco.active .dos::after {
-    transform: translateY(-8px) rotate(-45deg);
-    }
-
-    /* ===== Título dentro del header ===== */
-    .tres {
+.tres {
     flex-grow: 1;
     text-align: center;
-    }
+}
 
-    .cuatro {
+.cuatro {
     margin: 0;
     font-size: 24px;
-    font-weight: 600;
-    }
+}
 
-    /* ===== Barra lateral ===== */
-    .cinco {
-    background-color: #34495e;
+/* Sidebar Principal */
+.cinco {
+    width: 0;
+    background-color: #2c3e50;
     color: white;
-    width: 250px;
-    padding-top: 80px; /* Space for fixed header */
+    padding-top: 80px;
     position: fixed;
     height: 100%;
-    left: -250px;
-    transition: left 0.3s ease-in-out;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
-    z-index: 999;
-    overflow-y: auto; /* Enable scrolling for long menus */
-    }
-
-    .cinco.active {
     left: 0;
-    }
+    top: 0;
+    overflow-x: hidden;
+    transition: 0.3s;
+    z-index: 999;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+}
 
-    .seis {
+.cinco.active {
+    width: 250px;
+}
+
+.seis {
     text-align: center;
     margin-bottom: 30px;
-    font-size: 22px;
-    font-weight: 500;
-    color: #ecf0f1;
-    }
-
-    .siete ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    }
-
-    .ocho, .nueve, .diez {
-    margin-bottom: 5px; /* Slightly less space */
-    }
-
-    .ocho a, .nueve a, .diez a {
-    display: flex; /* Use flexbox for icon alignment */
-    align-items: center; /* Align icon and text vertically */
-    padding: 15px 20px;
-    color: white;
-    text-decoration: none;
-    font-size: 18px;
-    transition: background-color 0.3s ease, color 0.3s ease;
-    border-left: 5px solid transparent;
-    }
-
-    .menu-icon {
-    margin-right: 15px; /* Space between icon and text */
     font-size: 20px;
-    }
+    color: #ecf0f1;
+}
 
-    .ocho a:hover, .nueve a:hover, .diez a:hover,
-    .ocho a.active, .nueve a.active, .diez a.active {
-    background-color: #2c3e50;
-    border-left-color: #3498db;
-    color: #3498db;
-    }
+.siete ul {
+    list-style-type: none;
+    padding: 0;
+}
 
-    /* ===== Contenido principal ===== */
-    .once {
+.siete ul li a {
+    padding: 15px 20px;
+    text-decoration: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s, color 0.3s;
+    font-size: 16px;
+}
+
+.siete ul li a:hover,
+.siete ul li a.active {
+    background-color: #4a535e;
+    color: #fff;
+    border-left: 5px solid #28a745;
+}
+
+.menu-icon {
+    margin-right: 15px;
+    font-size: 18px;
+}
+
+/* Submenú Lateral */
+.submenu-lateral {
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+    background-color: #34495e;
+    color: white;
+    padding-top: 80px;
+    position: fixed;
+    height: 100%;
+    left: 0;
+    top: 0;
+    overflow-x: hidden;
+    transition: left 0.3s ease, width 0.3s ease;
+    z-index: 998;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    display: none;
+}
+
+.submenu-lateral.active {
+    left: 0;
+    display: block;
+}
+
+.submenu-title {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 18px;
+    color: #ecf0f1;
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.submenu-lateral ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.submenu-lateral ul li a {
+    padding: 12px 15px;
+    text-decoration: none;
+    color: #bdc3c7;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s, color 0.3s;
+    font-size: 15px;
+}
+
+.submenu-lateral ul li a:hover,
+.submenu-lateral ul li a.active {
+    background-color: #4f637f;
+    color: #fff;
+}
+
+/* Overlay para el submenú */
+.submenu-overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    background: rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    display: none;
+    transition: opacity 0.3s ease;
+}
+
+/* Contenido Principal */
+.once {
     margin-left: 0;
-    padding: 90px 20px 20px 20px; /* Top padding to clear fixed header */
+    padding: 80px 20px 20px 20px;
+    transition: margin-left 0.3s;
     flex-grow: 1;
-    transition: margin-left 0.3s ease-in-out;
-    width: 100%;
     box-sizing: border-box;
-    }
+}
 
-    .once.shifted {
+.once.shifted {
     margin-left: 250px;
-    }
+}
 
-    .doce, .diecinueve {
+.doce {
     background-color: white;
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-    margin-bottom: 20px;
-    display: none;
-    }
-
-    .doce.active-section, .diecinueve.active-section {
-    display: block;
-    }
-
-    /* ===== Encabezados de sección ===== */
-    .trece, .veinte {
-    border-bottom: 2px solid #eee;
-    padding-bottom: 15px;
     margin-bottom: 25px;
-    text-align: center;
-    }
+    display: none;
+}
 
-    .catorce, .veintiuno {
-    margin: 0;
-    color: #2c3e50;
-    font-size: 26px;
-    font-weight: 600;
-    }
-
-    /* ===== Cajas de datos ===== */
-    .quince, .veintidos {
-    padding: 20px;
-    border: 1px solid #e0e0e0;
-    border-radius: 5px;
-    background-color: #fcfcfc;
-    }
-
-    .dieciseis, .veintitres {
-    margin-top: 0;
-    color: #34495e;
-    font-size: 20px;
-    margin-bottom: 15px;
-    }
-
-    .diecisiete, .veinticuatro {
-    font-size: 18px;
-    color: #555;
-    }
-
-    .dieciocho, .veinticuatro {
-    font-weight: bold;
-    color: #3498db;
-    }
-
-    /* ===== Buttons General Styling ===== */
-    .action-button {
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-right: 10px;
-    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    white-space: nowrap; /* Prevent text wrapping */
-    }
-
-    .action-button:last-child {
-    margin-right: 0;
-    }
-
-    .action-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .primary-button {
-    background-color: #3498db;
-    }
-    .primary-button:hover {
-    background-color: #2980b9;
-    }
-
-    .success-button {
-    background-color: #2ecc71;
-    }
-    .success-button:hover {
-    background-color: #27ae60;
-    }
-
-    .danger-button {
-    background-color: #e74c3c;
-    }
-    .danger-button:hover {
-    background-color: #c0392b;
-    }
-
-    /* ===== Old Buttons (Can be refactored to new system) ===== */
-    .veinticinco { /* Encender */
-    /* Use @extend or simply apply properties directly */
-    background-color: #3498db;
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-right: 15px;
-    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    }
-
-    .veinticinco:hover {
-    background-color: #2980b9;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .veintiseis { /* Apagar */
-    background-color: #e74c3c;
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-right: 15px; /* Adjust if needed */
-    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    }
-
-    .veintiseis:hover {
-    background-color: #c0392b;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-
-    /* ===== Formulario WiFi (Original, might not be used directly) ===== */
-    .wifi-form {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    }
-
-    .wifi-input {
-    padding: 12px 15px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 16px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    width: calc(100% - 30px); /* Adjust for padding */
-    box-sizing: border-box;
-    }
-
-    .wifi-input:focus {
-    border-color: #3498db;
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
-    }
-
-    .wifi-save { /* Original save button, now replaced by new buttons */
-    background-color: #2ecc71;
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-    }
-
-    .wifi-save:hover {
-    background-color: #27ae60;
-    }
-
-    .wifi-status {
-    margin-top: 10px;
-    font-size: 16px;
-    color: #3498db;
-    text-align: center;
-    }
-
-
-    /* ===== WiFi Section Specific Styles ===== */
-    .wifi-controls {
-    display: flex;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #eee;
-    }
-
-    .wifi-tab-button {
-    flex: 1;
-    padding: 15px;
-    background-color: #ecf0f1;
-    border: none;
-    cursor: pointer;
-    font-size: 17px;
-    font-weight: 600;
-    color: #34495e;
-    transition: background-color 0.3s ease, color 0.3s ease, border-bottom 0.3s ease;
-    border-radius: 8px 8px 0 0;
-    margin-right: 5px;
-    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.05); /* subtle inner shadow */
-    }
-
-    .wifi-tab-button:last-child {
-    margin-right: 0;
-    }
-
-    .wifi-tab-button.active {
-    background-color: #3498db;
-    color: white;
-    border-bottom: 3px solid #2980b9;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-    }
-
-    .wifi-tab-button:hover:not(.active) {
-    background-color: #dfe6e9;
-    color: #2c3e50;
-    }
-
-    .wifi-section {
-    display: none; /* Hidden by default, JavaScript controls visibility */
-    padding-top: 15px;
-    }
-
-    .wifi-section.active {
+.doce.active-section {
     display: block;
-    }
+}
 
-    /* Network Table Styling */
-    .network-list-container {
-    margin-top: 20px;
-    background-color: #ffffff;
-    border-radius: 8px;
-    overflow-x: auto; /* Allows horizontal scrolling for small screens */
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
+.trece {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
 
-    .network-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px; /* Space after buttons */
-    }
-
-    .network-table th,
-    .network-table td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid #e0e0e0;
-    white-space: nowrap; /* Prevent text wrapping in cells */
-    }
-
-    .network-table th {
-    background-color: #f8f8f8;
-    color: #34495e;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 14px;
-    }
-
-    .network-table tbody tr:nth-child(even) {
-    background-color: #fcfcfc;
-    }
-
-    /* WiFi signal icon */
-    .signal-icon {
-    font-size: 18px;
-    color: #2ecc71; /* Green for strong signal */
-    }
-
-    .signal-icon.medium {
-    color: #f39c12; /* Orange for medium signal */
-    }
-
-    .signal-icon.weak {
-    color: #e74c3c; /* Red for weak signal */
-    }
-
-    /* Table Buttons */
-    .table-button {
-    padding: 8px 15px;
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    white-space: nowrap;
-    }
-
-    .connect-button {
-    background-color: #3498db;
-    color: white;
-    border: 1px solid #3498db;
-    }
-    .connect-button:hover {
-    background-color: #2980b9;
-    }
-
-    .edit-button {
-    background-color: #f39c12;
-    color: white;
-    border: 1px solid #f39c12;
-    }
-    .edit-button:hover {
-    background-color: #e67e22;
-    }
-
-    .delete-button {
-    background-color: #e74c3c;
-    color: white;
-    border: 1px solid #e74c3c;
-    margin-left: 5px;
-    }
-    .delete-button:hover {
-    background-color: #c0392b;
-    }
-
-    /* Info and Loading Messages */
-    .loading-message, .info-message {
+.catorce {
+    margin: 0;
+    color: #5e6977;
+    font-size: 26px;
     text-align: center;
-    padding: 20px;
-    color: #555;
-    font-style: italic;
-    }
+}
 
-    /* Toast Notifications */
-    #toastContainer {
+/* Sección de Inicio */
+.quince {
+    padding: 15px;
+}
+
+.dieciseis {
+    font-size: 20px;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 15px;
+    border-bottom: 1px dashed #ddd;
+    padding-bottom: 10px;
+}
+
+.diecisiete {
+    font-size: 18px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-left: 10px;
+}
+
+.dieciocho {
+    font-weight: bold;
+    color: #5e6977;
+}
+
+/* Controles de Pantalla */
+.pantalla-status-box {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 25px;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.pantalla-status-box h4 {
+    color: #5e6977;
+    font-size: 22px;
+    margin-bottom: 20px;
+}
+
+.pantalla-status-row {
+    margin-bottom: 25px;
+    font-size: 18px;
+}
+
+.pantalla-status-row strong {
+    font-size: 20px;
+    color: #28a745;
+}
+
+.pantalla-status-actions {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+/* Botones de Acción */
+.action-button {
+    padding: 12px 25px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.action-button i {
+    margin-right: 8px;
+}
+
+.action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.success-button {
+    background-color: #28a745;
+    color: white;
+}
+
+.success-button:hover {
+    background-color: #218838;
+}
+
+.danger-button {
+    background-color: #dc3545;
+    color: white;
+}
+
+.danger-button:hover {
+    background-color: #c82333;
+}
+
+.info-button {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.info-button:hover {
+    background-color: #138496;
+}
+
+/* Sección de Datos */
+.datos-form {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #555;
+    font-size: 17px;
+}
+
+.form-input {
+    width: calc(100% - 22px);
+    padding: 12px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-input:focus {
+    border-color: #5e6977;
+    box-shadow: 0 0 0 3px rgba(94, 105, 119, 0.25);
+    outline: none;
+}
+
+/* Toast Notifications */
+#toastContainer {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    z-index: 3000;
+    z-index: 10000;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
-    }
+    gap: 10px;
+}
 
-    .toast {
+.toast {
     background-color: #333;
     color: white;
     padding: 12px 20px;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    opacity: 0;
-    transform: translateY(20px);
-    animation: slideInToast 0.5s forwards, fadeOutToast 0.5s forwards 2.5s; /* Fade out after 2.5s delay */
+    border-radius: 5px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    opacity: 1;
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
     min-width: 250px;
     text-align: center;
-    font-size: 15px;
-    }
+}
 
-    .toast.success {
-    background-color: #28a745; /* Green */
-    }
+.toast.success {
+    background-color: #28a745;
+}
 
-    .toast.error {
-    background-color: #dc3545; /* Red */
-    }
+.toast.error {
+    background-color: #dc3545;
+}
 
-    @keyframes slideInToast {
-    to {
-    opacity: 1;
-    transform: translateY(0);
-    }
-    }
+.toast.info {
+    background-color: #17a2b8;
+}
 
-    @keyframes fadeOutToast {
-    to {
-    opacity: 0;
-    transform: translateY(-20px);
-    }
-    }
+/* Sección de WiFi */
+.wifi-sections-wrapper {
+    display: flex;
+    gap: 25px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
 
-    /* Responsive Adjustments */
-    @media (max-width: 768px) {
-    .cinco {
-    width: 200px;
-    left: -200px;
-    }
+.wifi-sub-section {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    margin-top: 0;
+    flex: 1;
+    min-width: 300px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
 
-    .once.shifted {
-    margin-left: 200px;
-    }
+.wifi-sub-section h4 {
+    color: #5e6977;
+    font-size: 22px;
+    margin-bottom: 20px;
+    text-align: center;
+}
 
-    .ocho a, .nueve a, .diez a {
-    font-size: 16px;
+.wifi-status-row {
+    font-size: 18px;
+    text-align: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #ddd;
+}
+
+.wifi-status-row strong {
+    font-weight: bold;
+    color: #e74c3c;
+}
+
+.wifi-options-buttons {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 25px;
+    gap: 15px;
+}
+
+.wifi-options-buttons .action-button {
+    background-color: #6c757d;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+}
+
+.wifi-options-buttons .action-button.active {
+    background-color: #5e6977;
+    box-shadow: 0 2px 5px rgba(94, 105, 119, 0.3);
+}
+
+.wifi-section-content {
+    display: none;
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.wifi-section-content.active-content {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.action-buttons-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.wifi-table-container {
+    max-height: 350px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+}
+
+.wifi-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 0;
+    background-color: white;
+}
+
+.wifi-table th,
+.wifi-table td {
     padding: 12px 15px;
+    border-bottom: 1px solid #e0e0e0;
+    text-align: left;
+    font-size: 15px;
+}
+
+.wifi-table th {
+    background-color: #e9ecef;
+    font-weight: bold;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.wifi-table td {
+    vertical-align: middle;
+}
+
+.wifi-table tr:last-child td {
+    border-bottom: none;
+}
+
+.wifi-table tr:hover {
+    background-color: #f0f8ff;
+}
+
+.signal-icon {
+    color: #28a745;
+    font-size: 1.2em;
+}
+
+.signal-icon.medium {
+    color: #ffc107;
+}
+
+.signal-icon.weak {
+    color: #dc3545;
+}
+
+.table-button {
+    padding: 8px 12px;
+    font-size: 14px;
+    margin-right: 5px;
+}
+
+.no-data-message {
+    text-align: center;
+    padding: 20px;
+    color: #777;
+    font-style: italic;
+    background-color: #f0f0f0;
+    border-radius: 8px;
+    margin-top: 15px;
+}
+
+.wifi-input {
+    width: calc(60% - 10px);
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-right: 10px;
+    box-sizing: border-box;
+}
+
+/* Modal de Contraseña WiFi */
+#wifiPasswordModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    width: 90%;
+    max-width: 400px;
+    display: none;
+}
+
+#wifiPasswordModal.active {
+    display: block;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translate(-50%, -60%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+#modalSsidName {
+    font-size: 20px;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+}
+
+#wifiPasswordInput {
+    width: 90%;
+    padding: 12px;
+    margin: 15px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+#wifiPasswordInput.error {
+    border-color: #e74c3c;
+}
+
+.password-error {
+    color: #e74c3c;
+    font-size: 14px;
+    margin-top: 5px;
+    text-align: center;
+    display: none;
+}
+
+.password-error.show {
+    display: block;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+#connectWifiButton {
+    background-color: #28a745;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+#connectWifiButton:hover {
+    background-color: #218838;
+}
+
+#cancelWifiButton {
+    background-color: #6c757d;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+#cancelWifiButton:hover {
+    background-color: #5a6268;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+    .uno {
+        padding: 10px 15px;
     }
 
     .cuatro {
-    font-size: 20px;
-    }
-
-    .action-button {
-    padding: 10px 18px;
-    font-size: 14px;
-    }
-
-    .network-table th,
-    .network-table td {
-    padding: 10px;
-    font-size: 14px;
-    }
-
-    .wifi-tab-button {
-    font-size: 15px;
-    padding: 12px;
-    }
-    }
-
-    @media (max-width: 480px) {
-    .uno {
-    padding: 10px 15px;
+        font-size: 20px;
     }
 
     .dos {
-    left: 10px;
-    }
-
-    .cuatro {
-    font-size: 18px;
+        font-size: 24px;
+        margin-right: 15px;
     }
 
     .cinco {
-    width: 180px;
-    left: -180px;
-    padding-top: 60px;
+        padding-top: 70px;
+    }
+
+    .cinco.active {
+        width: 200px;
     }
 
     .once {
-    padding: 70px 15px 15px 15px;
+        margin-left: 0;
+        padding-top: 70px;
     }
 
     .once.shifted {
-    margin-left: 180px;
+        margin-left: 200px;
     }
 
-    .ocho a, .nueve a, .diez a {
-    font-size: 15px;
-    padding: 10px 12px;
+    .catorce {
+        font-size: 22px;
     }
 
-    .catorce, .veintiuno {
-    font-size: 22px;
+    .quince p {
+        font-size: 16px;
+    }
+
+    .pantalla-status-actions,
+    .action-buttons-container,
+    .wifi-options-buttons {
+        flex-direction: column;
+        gap: 10px;
     }
 
     .action-button {
-    display: block; /* Stack buttons on small screens */
-    width: 100%;
-    margin-right: 0;
-    margin-bottom: 10px;
-    }
-    .action-button:last-child {
-    margin-bottom: 0;
+        width: 100%;
+        padding: 10px;
+        font-size: 15px;
     }
 
-    .wifi-tab-button {
-    font-size: 14px;
-    padding: 10px;
+    .wifi-sections-wrapper {
+        flex-direction: column;
     }
 
-    .network-table th,
-    .network-table td {
-    font-size: 12px;
-    padding: 8px;
+    .wifi-sub-section {
+        min-width: unset;
+        width: 100%;
     }
+
+    .wifi-table th,
+    .wifi-table td {
+        padding: 10px;
+        font-size: 14px;
     }
+
+    .wifi-input {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
+    }
+
+    #wifiPasswordModal {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dos {
+        font-size: 22px;
+    }
+
+    .cuatro {
+        font-size: 18px;
+    }
+
+    .cinco.active {
+        width: 180px;
+    }
+
+    .once.shifted {
+        margin-left: 180px;
+    }
+
+    .siete ul li a {
+        font-size: 14px;
+        padding: 12px 15px;
+    }
+
+    .submenu-lateral {
+        width: 120px;
+        min-width: 120px;
+        max-width: 120px;
+    }
+
+    .submenu-lateral ul li a {
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    #wifiPasswordModal h3 {
+        font-size: 20px;
+    }
+
+    #wifiPasswordInput {
+        font-size: 14px;
+        padding: 8px;
+    }
+}

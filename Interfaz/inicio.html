@@ -1,107 +1,96 @@
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
+<!DOCTYPE html>
+<html lang="es">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Pantalla LoRa</title>
-    <link rel="stylesheet" href="Estilo.css">
+    <title>Mi Alarma</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    </head>
-    <body>
-    <div id="perro_uno" class="uno">
-    <i id="perro_dos" class="dos"></i>
-    <header id="perro_tres" class="tres">
-    <h1 id="perro_cuatro" class="cuatro">MI ALARMA</h1>
+    <link rel="stylesheet" href="Estilo.css">
+</head>
+<body>
+    <header class="uno">
+        <div class="dos" id="perro_dos">&#9776;</div>
+        <div class="tres">
+            <h1 class="cuatro">Configuración</h1>
+        </div>
     </header>
-    </div>
 
-    <aside id="perro_cinco" class="cinco">
-    <h2 id="perro_seis" class="seis">Menú</h2>
-    <nav id="perro_siete" class="siete">
-    <ul>
-    <li id="perro_ocho" class="ocho"><a href="#" data-section="inicio"><i class="fas fa-home menu-icon"></i> Inicio</a></li>
-    <li id="perro_nueve" class="nueve"><a href="#" data-section="pantalla"><i class="fas fa-desktop menu-icon"></i> Pantalla</a></li>
-    <li id="perro_diez" class="diez"><a href="#" data-section="wifi"><i class="fas fa-wifi menu-icon"></i> Configurar WiFi</a></li>
-    <li id="perro_once" class="diez"><a href="#" data-section="salir"><i class="fas fa-sign-out-alt menu-icon"></i> Salir</a></li>
-    </ul>
-    </nav>
+    <aside class="cinco" id="perro_cinco">
+        <h2 class="seis">Menú</h2>
+        <nav class="siete" id="perro_siete">
+            <ul>
+                <li id="perro_ocho"><a href="#" data-section="inicio"><i class="fas fa-home menu-icon"></i> Inicio</a></li>
+                <li><a href="#" data-section="datos"><i class="fas fa-database menu-icon"></i> Datos</a></li>
+                <li><a href="#" data-section="funciones" id="perro_nueve"><i class="fas fa-tools menu-icon"></i> Funciones</a></li>
+                <li><a href="#" data-section="salir"><i class="fas fa-sign-out-alt menu-icon"></i> Salir</a></li>
+            </ul>
+        </nav>
     </aside>
 
-    <main id="perro_doce" class="once">
-    <section id="perro_trece" class="doce active-section">
-    <header id="perro_catorce" class="trece">
-    <h2 id="perro_quince" class="catorce">Resumen del Sistema</h2>
-    </header>
-    <div id="perro_dieciseis" class="quince">
-    <h3 id="perro_diecisiete" class="dieciseis">Estado Actual</h3>
-    <p id="perro_dieciocho" class="diecisiete">Pantalla: <span id="perro_diecinueve" class="dieciocho">---</span></p>
-    <p id="perro_veinte" class="diecisiete">WiFi: <span id="perro_veintiuno" class="dieciocho">No configurado</span></p>
-    </div>
-    </section>
+    <aside id="pantallaSubmenu" class="submenu-lateral">
+        <h3 class="submenu-title">Funciones</h3>
+        <ul>
+            <li><a href="#" data-subsection="pantalla"><i class="fas fa-desktop menu-icon"></i> Pantalla</a></li>
+            <li><a href="#" data-subsection="wifi"><i class="fas fa-wifi menu-icon"></i> WiFi</a></li>
+            <li><a href="#" data-subsection="uart"><i class="fas fa-microchip menu-icon"></i> UART</a></li>
+            <li><a href="#" data-subsection="i2c"><i class="fas fa-microchip menu-icon"></i> I2C</a></li>
+            <li><a href="#" data-subsection="gpio"><i class="fas fa-th-large menu-icon"></i> GPIO</a></li>
+        </ul>
+    </aside>
 
-    <section id="perro_veintidos" class="diecinueve">
-    <header id="perro_veintitres" class="veinte">
-    <h2 id="perro_veinticuatro" class="veintiuno">Control de Pantalla</h2>
-    </header>
-    <div id="perro_veinticinco" class="veintidos">
-    <p id="perro_veintiseis" class="veintitres">Estado de la pantalla: <span id="perro_veintisiete" class="veinticuatro">Apagada</span></p>
-    <button id="perro_veintiocho" class="veinticinco">Encender</button>
-    <button id="perro_veintinueve" class="veintiseis">Apagar</button>
-    </div>
-    </section>
+    <main class="once" id="perro_doce">
+        <section id="inicio-section" class="doce">
+            <div class="trece">
+                <h2 class="catorce">Inicio</h2>
+            </div>
+            <div class="quince">
+                <p class="dieciseis">Resumen</p>
+                <p class="diecisiete">Estado de Pantalla: <strong id="perro_diecinueve" class="dieciocho">----</strong></p>
+                <p class="diecisiete">Estado de WiFi: <strong id="perro_veintiuno" class="dieciocho">----</strong></p>
+                <p class="diecisiete">ID del Dispositivo: <strong id="perro_id_value" class="dieciocho">---</strong></p>
+                <p class="diecisiete">Canal LoRa: <strong id="perro_canal_value" class="dieciocho">---</strong></p>
+            </div>
+        </section>
 
-    <section id="perro_treinta" class="diecinueve">
-    <header id="perro_treintauno" class="veinte">
-    <h2 id="perro_treintados" class="veintiuno">Configuración WiFi</h2>
-    </header>
-    <div class="wifi-controls">
-    <button id="showAvailableNetworks" class="wifi-tab-button active">Redes Disponibles</button>
-    <button id="showSavedNetworks" class="wifi-tab-button">Redes Guardadas</button>
-    </div>
+        <section id="datos-section" class="doce">
+            <div class="trece">
+                <h2 class="catorce">Formulario</h2>
+            </div>
+            <div class="datos-form">
+                <div class="form-group">
+                    <label for="idDispositivo">ID:</label>
+                    <input type="text" id="idDispositivo" class="form-input" maxlength="3" placeholder="Ej. ABC">
+                </div>
+                <div class="form-group">
+                    <label for="canalLoRa">Canal (0-8):</label>
+                    <input type="number" id="canalLoRa" class="form-input" min="0" max="8" placeholder="Ej. 1">
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="guardarDatos" class="action-button success-button">Guardar</button>
+                    <button id="restablecerDatos" class="action-button danger-button">Restablecer</button>
+                </div>
+                <p style="text-align: center; margin-top: 15px; font-style: italic;" id="datosStatus"></p>
+            </div>
+        </section>
 
-    <div id="availableNetworksSection" class="wifi-section active">
-    <button id="getAvailableNetworks" class="action-button primary-button">Mostrar Redes Disponibles</button>
-    <div class="network-list-container">
-    <p id="loadingAvailable" class="loading-message" style="display: none;">Cargando redes disponibles...</p>
-    <table id="availableNetworksTable" class="network-table" style="display: none;">
-        <thead>
-            <tr>
-                <th>SSID</th>
-                <th>Seguridad</th>
-                <th>Intensidad</th>
-                <th>Contraseña</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
-    <p id="noAvailableNetworks" class="info-message" style="display: none;">Presione el botón para Obtener las Redes Disponibles</p>
-    </div>
-    </div>
-
-    <div id="savedNetworksSection" class="wifi-section">
-    <button id="getSavedNetworks" class="action-button primary-button">Mostrar Redes Guardadas</button>
-    <button id="clearAllSavedNetworks" class="action-button danger-button">Borrar Todas las Redes Guardadas</button>
-    <div class="network-list-container">
-    <p id="loadingSaved" class="loading-message" style="display: none;">Cargando redes guardadas...</p>
-    <table id="savedNetworksTable" class="network-table" style="display: none;">
-        <thead>
-            <tr>
-                <th>Nombre Red</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
-    <p id="noSavedNetworks" class="info-message" style="display: none;">Presione el botón para Obtener las Redes Guardadas</p>
-    </div>
-    </div>
-    </section>
+        <section id="funciones-content" class="doce funciones-container">
+        </section>
     </main>
 
     <div id="toastContainer"></div>
 
+    <div id="wifiPasswordModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3><span id="modalSsidName"></span></h3>
+            <label for="wifiPasswordInput">Contraseña:</label>
+            <input type="password" id="wifiPasswordInput" placeholder="Ingrese la contraseña de la red" required>
+            <div class="modal-buttons">
+                <button id="connectWifiButton" class="confirm-button">Conectar</button>
+                <button id="cancelWifiButton" class="cancel-button">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="Script.js"></script>
-    </body>
-    </html>
+</body>
+</html>

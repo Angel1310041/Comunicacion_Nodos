@@ -4,7 +4,7 @@
 
 #define ENTRADA_FIJA 1  
 
-String Version = "1.2.4.2";
+String Version = "1.3.5.2";
 bool Pantalla = false;
 const int nodeID = 3; // O el valor que corresponda a tu placa
 
