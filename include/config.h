@@ -32,6 +32,7 @@ struct LoRaConfig {
   char IDLora[4];
   int Canal;
   bool Pantalla;
+  bool displayOn; 
   bool UART;
   bool I2C;
   char Pines[6];

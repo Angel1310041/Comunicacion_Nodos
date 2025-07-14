@@ -1,5 +1,6 @@
 #include "pantalla.h"
 #include "OLEDDisplayFonts.h"
+#include "config.h"
 bool displayActivo = true; // Initialize display as active by default
 
 void inicializarPantalla() {
@@ -93,6 +94,7 @@ void mostrarInfo(const String& mensajeInfo) {
 
 void configurarDisplay(bool habilitar) {
   displayActivo = habilitar;
+  configLora.displayOn = habilitar; // Update the config
   if (habilitar) {
     Heltec.display->displayOn(); // Turn on the display
     mostrarInfo("Display HABILITADO.");

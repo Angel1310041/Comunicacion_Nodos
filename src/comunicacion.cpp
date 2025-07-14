@@ -3,7 +3,7 @@
 #include "pantalla.h"
 #include "heltec.h"
 #include "RadioLib.h"
-
+#include "comunicacion.h"
 extern SX1262 lora;
 extern bool tieneInternet;
 
