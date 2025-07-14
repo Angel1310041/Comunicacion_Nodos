@@ -20,3 +20,7 @@ void Interfaz::entrarModoProgramacion() {
   );
   imprimirSerial("---# Modo Programacion Activado #---", 'g');
 }
+
+void endpointsMProg(void *pvParameters) {
+  imprimirSerial("Modo Programacion Falso", 'b');
+}
