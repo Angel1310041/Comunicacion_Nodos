@@ -1,0 +1,175 @@
+{
+  "condicionalesGPIO": [
+    {
+      "1": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "O"
+    },
+    {
+      "2": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "P"
+    },
+    {
+      "3": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "Q"
+    },
+    {
+      "4": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "R"
+    },
+    {
+      "5": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "S"
+    },
+    {
+      "6": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "T"
+    },
+    {
+      "7": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "U"
+    },
+    {
+      "8": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "V"
+    },
+    {
+      "9": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "W"
+    },
+    {
+      "10": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "X"
+    },
+    {
+      "11": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "Y"
+    },
+    {
+      "12": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N"},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N"}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N"}
+          ],
+      "resultado": "Z"
+    }
+  ],
+
+  "acciones": [
+    {
+      "O": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "P": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "Q": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "R": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "S": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "T": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "U": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "V": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "W": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "X": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "Y": {"PIN": 0, "FLANCO": "N"}
+    },
+    {
+      "Z": {"PIN": 0, "FLANCO": "N"}
+    }
+  ]
+}
