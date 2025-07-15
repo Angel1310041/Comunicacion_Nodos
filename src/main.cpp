@@ -11,10 +11,13 @@
 // --- Variables globales ---
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 bool tieneInternet = true; // Pon true en la placa que tiene internet
-String Version = "1.3.2.5";
+String Version = "1.4.2.1";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
-TaskHandle_t tareaComandosSerial = NULL;
+
+TaskHandle_t tareaComandosSerial;
+TaskHandle_t tareaComandosVecinal;
+
 extern String ultimoComandoRecibido; // Definida en comunicacion.cpp
 
 #define MSG_ID_BUFFER_SIZE 16
@@ -93,7 +96,8 @@ void enviarComandoEstructurado(const String& destino, char red, const String& co
         int resultado = lora.transmit(paquete);
         if (resultado == RADIOLIB_ERR_NONE) {
             imprimirSerial("Comando enviado correctamente.", 'g');
-            digitalWrite(LED_STATUS, HIGH); delay(100); digitalWrite(LED_STATUS, LOW);
+            // Cambia el parpadeo simple por el estrobo de envío por LoRa
+            Hardware::manejarComandoPorFuente("lora");
             guardarMsgID(msgID); mostrarMensajeEnviado(destino, msg);
         } else {
             imprimirSerial("Error al enviar: " + String(resultado), 'r');
@@ -116,24 +120,27 @@ void recibirComandoSerial(void *pvParameters) {
         comandoSerial = ManejoComunicacion::leerSerial();
         comandoSerial.trim();
 
-        if (!comandoSerial.isEmpty()) {
-            imprimirSerial("Comando recibido por Serial: " + comandoSerial, 'y');
-            // Espera comandos en formato: ID@R@CMD
-            int idx1 = comandoSerial.indexOf('@');
-            int idx2 = comandoSerial.indexOf('@', idx1 + 1);
-            int idx3 = comandoSerial.indexOf('@', idx2 + 1);
-            if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
-                String destino = comandoSerial.substring(0, idx1);
-                char red = comandoSerial.charAt(idx1 + 1);
-                String comando = comandoSerial.substring(idx2 + 1, idx3);
-                // El número aleatorio se ignora al enviar, se genera nuevo
-                enviarComandoEstructurado(destino, red, comando);
-            } else {
-                imprimirSerial("Formato inválido. Usa: ID@R@CMD@##", 'r');
-                mostrarInfo("Formato invalido. Usa: ID@R@CMD@##");
-            }
-            ultimoComandoRecibido = comandoSerial;
-        }
+if (!comandoSerial.isEmpty()) {
+    imprimirSerial("Comando recibido por Serial: " + comandoSerial, 'y');
+    Hardware::manejarComandoPorFuente("serial");
+    // Espera comandos en formato: ID@R@CMD
+    int idx1 = comandoSerial.indexOf('@');
+    int idx2 = comandoSerial.indexOf('@', idx1 + 1);
+    int idx3 = comandoSerial.indexOf('@', idx2 + 1);
+    if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
+        String destino = comandoSerial.substring(0, idx1);
+        char red = comandoSerial.charAt(idx1 + 1);
+        String comando = comandoSerial.substring(idx2 + 1, idx3);
+        // El número aleatorio se ignora al enviar, se genera nuevo
+        enviarComandoEstructurado(destino, red, comando);
+        // --- PROCESA EL COMANDO LOCALMENTE TAMBIÉN ---
+        ManejoComunicacion::procesarComando(comandoSerial);
+    } else {
+        imprimirSerial("Formato inválido. Usa: ID@R@CMD@##", 'r');
+        mostrarInfo("Formato invalido. Usa: ID@R@CMD@##");
+    }
+    ultimoComandoRecibido = comandoSerial;
+}
         esp_task_wdt_reset();
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
@@ -193,108 +200,93 @@ void setup() {
     }
 }
 
+void recibirComandosVecinal(void *pvParameters) {
+  imprimirSerial("Esperando comandos por UART (Vecinal)...");
+  tareaComandosVecinal = xTaskGetCurrentTaskHandle();
+  String comandoVecinal = "";
+
+  while (true) {
+    comandoVecinal = ManejoComunicacion::leerVecinal();
+    if (!comandoVecinal.isEmpty()) {
+      // Aquí podrías agregar un estrobo especial si lo deseas para UART vecinal
+      // Hardware::manejarComandoPorFuente("vecinal");
+      ManejoComunicacion::procesarComando(comandoVecinal);
+      ultimoComandoRecibido = comandoVecinal;
+    } else if (comandoVecinal == ultimoComandoRecibido) {
+      comandoVecinal = "";
+    } 
+    esp_task_wdt_reset();
+    vTaskDelay(3000);
+  }
+  vTaskDelete(NULL);
+}
+
 // --- LOOP ---
 void loop() {
-    static unsigned long ultimoSondeo = 0, tiempoMostrar = 0;
-    static bool esperandoMostrar = false, sondeoManual = false;
+  if (!modoProgramacion && tareaComandosSerial == NULL && configLora.DEBUG) {
+    imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
+    xTaskCreatePinnedToCore(
+      recibirComandoSerial,
+      "Comandos Seriales",
+      5120,
+      NULL,
+      1,
+      &tareaComandosSerial,
+      0
+    );
+    imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
+  }
 
-    // Sondeo automático/manual
-    if (tieneInternet) {
-        if (millis() - ultimoSondeo > 600000 && !sondeoManual) {
-            limpiarNodosActivos(); enviarSondeo();
-            ultimoSondeo = millis(); tiempoMostrar = millis(); esperandoMostrar = true;
-        }
-        if (esperandoMostrar && millis() - tiempoMostrar > 5000) {
-            mostrarNodosActivos();
-            esperandoMostrar = false; sondeoManual = false;
-        }
-    }
+  if (!modoProgramacion && tareaComandosVecinal == NULL && configLora.UART) {
+    imprimirSerial("Iniciando tarea de recepcion de comandos Vecinal...", 'c');
+    xTaskCreatePinnedToCore(
+      recibirComandosVecinal,
+      "Comandos Vecinales",
+      5120,
+      NULL,
+      1,
+      &tareaComandosVecinal,
+      0
+    );
+    imprimirSerial("Tarea de recepcion de comandos Vecinal iniciada", 'c');
+  }
 
-    // Recepción de mensajes LoRa
-    if (receivedFlag) {
-        receivedFlag = false;
-        String msg;
-        int state = lora.readData(msg);
-        if (state == RADIOLIB_ERR_NONE) {
-            responderSondeo(msg);
-            imprimirSerial("Recibido: " + msg, 'b');
-            if (tieneInternet && msg.startsWith("RESPUESTA|ID:")) {
-                int idxIni = msg.indexOf("RESPUESTA|ID:") + 13, idxFin = msg.indexOf("|CANAL:");
-                if (idxIni != -1 && idxFin != -1 && idxFin > idxIni) {
-                    String idNodo = msg.substring(idxIni, idxFin);
-                    if (idNodo != String(configLora.IDLora)) {
-                        agregarNodoActivo(idNodo);
-                        imprimirSerial("Nodo activo detectado: " + idNodo, 'g');
-                    }
-                }
-            }
-            int canalMsg = -1, idxCanal = msg.indexOf("|CANAL:"), idxID = msg.indexOf("|ID:");
-            if (idxCanal != -1)
-                canalMsg = msg.substring(idxCanal + 7, idxID == -1 ? msg.length() : idxID).toInt();
-            String msgID = (idxID != -1) ? msg.substring(idxID + 4) : "";
-            if ((canalMsg != -1 && canalMsg != configLora.Canal) || (msgID.length() > 0 && esMsgDuplicado(msgID))) {
-                lora.startReceive(); return;
-            }
-            if (msgID.length() > 0) guardarMsgID(msgID);
+  static unsigned long ultimoSondeo = 0, tiempoMostrar = 0;
+  static bool esperandoMostrar = false, sondeoManual = false;
 
-            int idxOrig = msg.indexOf("ORIG:"), idxDest = msg.indexOf("|DEST:"), idxMsg = msg.indexOf("|MSG:"), idxHop = msg.indexOf("|HOP:");
-            if (idxOrig != -1 && idxDest != -1 && idxMsg != -1 && idxHop != -1) {
-                String orig = msg.substring(idxOrig + 5, idxDest);
-                String dest = msg.substring(idxDest + 6, idxMsg);
-                String cuerpo = msg.substring(idxMsg + 5, idxHop);
-                String hop = msg.substring(idxHop + 5, idxCanal == -1 ? msg.length() : idxCanal);
+  // Sondeo automático/manual
+  if (tieneInternet) {
+      if (millis() - ultimoSondeo > 600000 && !sondeoManual) {
+          limpiarNodosActivos(); enviarSondeo();
+          ultimoSondeo = millis(); tiempoMostrar = millis(); esperandoMostrar = true;
+      }
+      if (esperandoMostrar && millis() - tiempoMostrar > 5000) {
+          mostrarNodosActivos();
+          esperandoMostrar = false; sondeoManual = false;
+      }
+  }
 
-                // --- Procesa comandos recibidos SOLO si el mensaje es para este nodo ---
-                if (strcmp(dest.c_str(), configLora.IDLora) == 0) {
-                    digitalWrite(LED_STATUS, HIGH); delay(100); digitalWrite(LED_STATUS, LOW);
-
-                    // Procesar comandos estructurados: ID@R@CMD@##
-                    int idxA1 = cuerpo.indexOf('@');
-                    int idxA2 = cuerpo.indexOf('@', idxA1 + 1);
-                    int idxA3 = cuerpo.indexOf('@', idxA2 + 1);
-                    if (idxA1 > 0 && idxA2 > idxA1 && idxA3 > idxA2) {
-                        String idCmd = cuerpo.substring(0, idxA1);
-                        char redCmd = cuerpo.charAt(idxA1 + 1);
-                        String cmd = cuerpo.substring(idxA2 + 1, idxA3);
-                        // String numAzar = cuerpo.substring(idxA3 + 1); // Si necesitas el número aleatorio
-
-                        // Ejecutar comando
-                        if (cmd.equalsIgnoreCase("SCR>1")) {
-                            configurarDisplay(true);
-                            imprimirSerial("Comando recibido: DISPLAY ON", 'g');
-                        } else if (cmd.equalsIgnoreCase("SCR>0")) {
-                            configurarDisplay(false);
-                            imprimirSerial("Comando recibido: DISPLAY OFF", 'y');
-                        } else if (cmd.equalsIgnoreCase("RESET")) {
-                            borrarConfig();
-                            imprimirSerial("Comando recibido: RESET. Configuración borrada, reinicia el nodo.", 'r');
-                            mostrarInfo("Configuración borrada. Reinicia.");
-                        } else if (cmd.equalsIgnoreCase("GETID")) {
-                            // Responder con el ID de este nodo al origen
-                            String respuesta = String(configLora.IDLora);
-                            // Enviar respuesta estructurada de vuelta al origen
-                            enviarComandoEstructurado(orig, redCmd, "ID:" + respuesta);
-                            imprimirSerial("Comando recibido: GETID. Respondiendo con mi ID: " + respuesta, 'g');
-                            mostrarMensajeRecibido(orig, "Mi ID: " + respuesta);
-                        } else {
-                            mostrarMensajeRecibido(orig, cmd); 
-                        }
-                    } else {
-                        mostrarMensajeRecibido(orig, cuerpo); 
-                    }
-                }
-                // --- Reenvío si soy hop ---
-                else if (strcmp(hop.c_str(), configLora.IDLora) == 0) {
-                    String siguienteHop = dest;
-                    String nuevoMsg = "ORIG:" + orig + "|DEST:" + dest + "|MSG:" + cuerpo + "|HOP:" + siguienteHop + "|CANAL:" + String(configLora.Canal) + "|ID:" + msgID;
-                    delay(100); lora.standby(); lora.transmit(nuevoMsg);
-                    mostrarMensaje("Reenviando...", "A HOP: " + siguienteHop, 0);
-                    lora.startReceive();
-                }
-            }
-        }
-        lora.startReceive();
-        mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
-    }
-    delay(100); // Pequeño delay para evitar saturar el loop
+  // Recepción de mensajes LoRa: solo para sondeo y registro de nodos activos
+  if (receivedFlag) {
+      receivedFlag = false;
+      String msg;
+      int state = lora.readData(msg);
+      if (state == RADIOLIB_ERR_NONE) {
+          responderSondeo(msg);
+          imprimirSerial("Recibido: " + msg, 'b');
+          if (tieneInternet && msg.startsWith("RESPUESTA|ID:")) {
+              int idxIni = msg.indexOf("RESPUESTA|ID:") + 13, idxFin = msg.indexOf("|CANAL:");
+              if (idxIni != -1 && idxFin != -1 && idxFin > idxIni) {
+                  String idNodo = msg.substring(idxIni, idxFin);
+                  if (idNodo != String(configLora.IDLora)) {
+                      agregarNodoActivo(idNodo);
+                      imprimirSerial("Nodo activo detectado: " + idNodo, 'g');
+                  }
+              }
+          }
+      }
+      lora.startReceive();
+      mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
+  }
+  delay(100); // Pequeño delay para evitar saturar el loop
 }

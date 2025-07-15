@@ -7,6 +7,13 @@ const int pinNumbers[6] = {PIN_IO1, PIN_IO2, PIN_IO3, PIN_IO4, PIN_IO5, PIN_IO6}
 // Arreglo con los nombres para mensajes
 const char* pinNames[6] = {"IO1", "IO2", "IO3", "IO4", "IO5", "IO6"};
 
+// --- Variables para tarea de parpadeo asíncrono ---
+TaskHandle_t tareaParpadeoLED = NULL;
+String fuenteParpadeoPendiente = "";
+
+// --- Prototipo de la tarea ---
+void tareaParpadeoLEDHandler(void *pvParameters);
+
 void Hardware::inicializar() {
   ManejoEEPROM::tarjetaNueva();
   pinMode(LED_STATUS, OUTPUT);
@@ -57,29 +64,38 @@ void Hardware::blinkPin(int pin, int times, int delayTime) {
 }
 
 void Hardware::manejoEstrobo(int pin, int freq, int delayTime) {
-  int tiempo = delayTime * 1000;
-  int ciclos = tiempo / (2 * freq);
+  // Enciende el pin una vez durante delayTime ms
+  digitalWrite(pin, HIGH);
+  vTaskDelay(delayTime / portTICK_PERIOD_MS);
+  digitalWrite(pin, LOW);
+}
 
-  for (int i = 0; i < ciclos; i++) {
-    digitalWrite(pin, HIGH);
-    vTaskDelay(delayTime / portTICK_PERIOD_MS);
-    digitalWrite(pin, LOW);
-    vTaskDelay(delayTime / portTICK_PERIOD_MS);
+void tareaParpadeoLEDHandler(void *pvParameters) {
+  String fuente = *(String*)pvParameters;
+  delete (String*)pvParameters;
+  if (fuente == "wifi") {
+    Hardware::blinkPin(LED_STATUS, 2, 300);
+  } else if (fuente == "serial") {
+    Hardware::blinkPin(LED_STATUS, 3, 200);
+  } else if (fuente == "lora") {
+    Hardware::manejoEstrobo(LED_STATUS, 1, 600);
   }
+  tareaParpadeoLED = NULL;
+  vTaskDelete(NULL);
 }
 
 void Hardware::manejarComandoPorFuente(const String& fuente) {
-  if (fuente == "wifi") {
-    // Enciende 2 veces cada 300 ms
-    Hardware::blinkPin(LED_STATUS, 2, 300);
-  } else if (fuente == "serial") {
-    // Enciende 3 veces cada 200 ms
-    Hardware::blinkPin(LED_STATUS, 3, 200);
-  } else if (fuente == "lora") {
-    // Enciende 1 vez durante 600 ms
-    // Usamos manejoEstrobo para un solo ciclo de 600 ms
-    Hardware::manejoEstrobo(LED_STATUS, 1, 600);
-  } else {
-    imprimirSerial("Fuente de comando desconocida", 'y');
+  // Solo permite una tarea de parpadeo a la vez
+  if (tareaParpadeoLED == NULL) {
+    String* fuenteCopia = new String(fuente);
+    xTaskCreatePinnedToCore(
+      tareaParpadeoLEDHandler,
+      "ParpadeoLED",
+      2048,
+      fuenteCopia,
+      1,
+      &tareaParpadeoLED,
+      1
+    );
   }
 }
