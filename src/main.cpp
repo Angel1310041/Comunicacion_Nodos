@@ -7,10 +7,11 @@
 #include "comunicacion.h"
 #include "eeprom.h"
 #include "hardware.h"
+
 // --- Variables globales ---
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 bool tieneInternet = true; // Pon true en la placa que tiene internet
-String Version = "1.2.2.4";
+String Version = "1.3.2.5";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 TaskHandle_t tareaComandosSerial = NULL;
@@ -23,6 +24,7 @@ int msgIdBufferIndex = 0;
 #define MAX_NODOS_ACTIVOS 32
 String nodosActivos[MAX_NODOS_ACTIVOS];
 int numNodosActivos = 0;
+String mensaje = "";
 
 // --- Utilidades de impresión con color ---
 void imprimirSerial(String mensaje, char color) {
@@ -73,75 +75,69 @@ void guardarMsgID(const String& msgId) {
 
 void setFlag() { receivedFlag = true; }
 
-// --- Envío de mensajes ---
-void enviarMensaje(const String& destino, const char* mensaje) {
-    if (strcmp(destino.c_str(), configLora.IDLora) != 0 && strlen(mensaje) > 0) {
+// --- Envío de mensajes con estructura nueva ---
+void enviarComandoEstructurado(const String& destino, char red, const String& comando) {
+    // Generar número aleatorio de 2 dígitos
+    int numAzar = random(10, 99);
+    String msg = destino + "@" + red + "@" + comando + "@" + String(numAzar);
+
+    // Enviar por LoRa (puedes adaptar para vecinal si es necesario)
+    if (strcmp(destino.c_str(), configLora.IDLora) != 0 && comando.length() > 0) {
         String siguienteHop = destino, msgID = generarMsgID();
         char paquete[256];
         snprintf(paquete, sizeof(paquete), "ORIG:%s|DEST:%s|MSG:%s|HOP:%s|CANAL:%d|ID:%s",
-            configLora.IDLora, destino.c_str(), mensaje, siguienteHop.c_str(), configLora.Canal, msgID.c_str());
-        imprimirSerial("Enviando a HOP:" + siguienteHop + " por canal " + String(configLora.Canal), 'c');
+            configLora.IDLora, destino.c_str(), msg.c_str(), siguienteHop.c_str(), configLora.Canal, msgID.c_str());
+        imprimirSerial("Enviando comando estructurado a HOP:" + siguienteHop + " por canal " + String(configLora.Canal), 'c');
         mostrarMensaje("Enviando...", "A HOP: " + siguienteHop, 0);
         lora.standby();
         int resultado = lora.transmit(paquete);
         if (resultado == RADIOLIB_ERR_NONE) {
-            imprimirSerial("Mensaje enviado correctamente.", 'g');
+            imprimirSerial("Comando enviado correctamente.", 'g');
             digitalWrite(LED_STATUS, HIGH); delay(100); digitalWrite(LED_STATUS, LOW);
-            guardarMsgID(msgID); mostrarMensajeEnviado(destino, mensaje);
+            guardarMsgID(msgID); mostrarMensajeEnviado(destino, msg);
         } else {
             imprimirSerial("Error al enviar: " + String(resultado), 'r');
             mostrarError("Error al enviar: " + String(resultado));
         }
         lora.startReceive();
     } else {
-        imprimirSerial("Destino inválido o mensaje vacío.", 'y');
-        mostrarInfo("Destino invalido o mensaje vacio.");
+        imprimirSerial("Destino inválido o comando vacío.", 'y');
+        mostrarInfo("Destino invalido o comando vacio.");
     }
 }
 
 // --- Tarea para comandos seriales (FreeRTOS) ---
 void recibirComandoSerial(void *pvParameters) {
-  imprimirSerial("Esperando comandos por Serial...", 'b');
-  tareaComandosSerial = xTaskGetCurrentTaskHandle();
-  String comandoSerial = "";
+    imprimirSerial("Esperando comandos por Serial...", 'b');
+    tareaComandosSerial = xTaskGetCurrentTaskHandle();
+    String comandoSerial = "";
 
-  while (true) {
-    if (Serial.available()) {
-      comandoSerial = Serial.readStringUntil('\n');
-      comandoSerial.trim();
-      if (!comandoSerial.isEmpty()) {
-        // Procesamiento de comandos
-        if (comandoSerial.equalsIgnoreCase("RESET")) {
-          borrarConfig(); mostrarInfo("Configuracion borrada. Reinicia."); 
-        } else if (comandoSerial.equalsIgnoreCase("DISPLAY ON")) {
-          configurarDisplay(true); imprimirSerial("Comando: DISPLAY ON - Display habilitado.", 'g');
-        } else if (comandoSerial.equalsIgnoreCase("DISPLAY OFF")) {
-          configurarDisplay(false); imprimirSerial("Comando: DISPLAY OFF - Display deshabilitado.", 'y');
-        } else if (comandoSerial.equalsIgnoreCase("SONDEO")) {
-          if (tieneInternet) {
-            limpiarNodosActivos(); enviarSondeo();
-            imprimirSerial("Sondeo manual iniciado...", 'c');
-          } else imprimirSerial("Esta placa no tiene internet, no puede hacer sondeo.", 'y');
-        } else {
-          // Envío de mensajes
-          int sep = comandoSerial.indexOf('|');
-          if (sep > 0) {
-            String destino = comandoSerial.substring(0, sep);
-            char mensaje[201];
-            comandoSerial.substring(sep + 1).toCharArray(mensaje, sizeof(mensaje));
-            enviarMensaje(destino, mensaje);
-          } else {
-            imprimirSerial("Formato inválido. Usa: ID_DESTINO|mensaje", 'r');
-            mostrarInfo("Formato invalido. Usa: ID|mensaje");
-          }
+    while (true) {
+        comandoSerial = ManejoComunicacion::leerSerial();
+        comandoSerial.trim();
+
+        if (!comandoSerial.isEmpty()) {
+            imprimirSerial("Comando recibido por Serial: " + comandoSerial, 'y');
+            // Espera comandos en formato: ID@R@CMD
+            int idx1 = comandoSerial.indexOf('@');
+            int idx2 = comandoSerial.indexOf('@', idx1 + 1);
+            int idx3 = comandoSerial.indexOf('@', idx2 + 1);
+            if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
+                String destino = comandoSerial.substring(0, idx1);
+                char red = comandoSerial.charAt(idx1 + 1);
+                String comando = comandoSerial.substring(idx2 + 1, idx3);
+                // El número aleatorio se ignora al enviar, se genera nuevo
+                enviarComandoEstructurado(destino, red, comando);
+            } else {
+                imprimirSerial("Formato inválido. Usa: ID@R@CMD@##", 'r');
+                mostrarInfo("Formato invalido. Usa: ID@R@CMD@##");
+            }
+            ultimoComandoRecibido = comandoSerial;
         }
-        ultimoComandoRecibido = comandoSerial;
-      }
+        esp_task_wdt_reset();
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-    esp_task_wdt_reset();
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-  }
-  vTaskDelete(NULL);
+    vTaskDelete(NULL);
 }
 
 // --- SETUP ---
@@ -153,8 +149,8 @@ void setup() {
     Heltec.begin(false, false, true);
     inicializarPantalla();
 
-      Hardware::inicializar();
-  ManejoComunicacion::inicializar();
+    Hardware::inicializar();
+    ManejoComunicacion::inicializar();
     cargarConfig();
     configurarDisplay(configLora.displayOn);
 
@@ -175,10 +171,8 @@ void setup() {
     imprimirSerial("LoRa ready.", 'g');
     imprimirSerial("ID de este nodo: " + String(configLora.IDLora), 'c');
     imprimirSerial("Canal: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)", 'c');
-    imprimirSerial("Escribe en el formato: ID_DESTINO|mensaje", 'y');
-    imprimirSerial("Para borrar la configuración y reconfigurar, escribe: RESET", 'y');
-    imprimirSerial("Para habilitar el display: DISPLAY ON", 'y');
-    imprimirSerial("Para deshabilitar el display: DISPLAY OFF", 'y');
+    imprimirSerial("Escribe en el formato: ID@R@CMD@##", 'y');
+    imprimirSerial("Ejemplo: A01@L@GETID@42", 'y');
     imprimirSerial("Version:" + Version, 'm');
 
     mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
@@ -254,16 +248,37 @@ void loop() {
                 if (strcmp(dest.c_str(), configLora.IDLora) == 0) {
                     digitalWrite(LED_STATUS, HIGH); delay(100); digitalWrite(LED_STATUS, LOW);
 
-                    if (cuerpo.equalsIgnoreCase("DISPLAY ON")) {
-                        configurarDisplay(true);
-                        imprimirSerial("Comando recibido: DISPLAY ON", 'g');
-                    } else if (cuerpo.equalsIgnoreCase("DISPLAY OFF")) {
-                        configurarDisplay(false);
-                        imprimirSerial("Comando recibido: DISPLAY OFF", 'y');
-                    } else if (cuerpo.equalsIgnoreCase("RESET")) {
-                        borrarConfig();
-                        imprimirSerial("Comando recibido: RESET. Configuración borrada, reinicia el nodo.", 'r');
-                        mostrarInfo("Configuración borrada. Reinicia.");
+                    // Procesar comandos estructurados: ID@R@CMD@##
+                    int idxA1 = cuerpo.indexOf('@');
+                    int idxA2 = cuerpo.indexOf('@', idxA1 + 1);
+                    int idxA3 = cuerpo.indexOf('@', idxA2 + 1);
+                    if (idxA1 > 0 && idxA2 > idxA1 && idxA3 > idxA2) {
+                        String idCmd = cuerpo.substring(0, idxA1);
+                        char redCmd = cuerpo.charAt(idxA1 + 1);
+                        String cmd = cuerpo.substring(idxA2 + 1, idxA3);
+                        // String numAzar = cuerpo.substring(idxA3 + 1); // Si necesitas el número aleatorio
+
+                        // Ejecutar comando
+                        if (cmd.equalsIgnoreCase("SCR>1")) {
+                            configurarDisplay(true);
+                            imprimirSerial("Comando recibido: DISPLAY ON", 'g');
+                        } else if (cmd.equalsIgnoreCase("SCR>0")) {
+                            configurarDisplay(false);
+                            imprimirSerial("Comando recibido: DISPLAY OFF", 'y');
+                        } else if (cmd.equalsIgnoreCase("RESET")) {
+                            borrarConfig();
+                            imprimirSerial("Comando recibido: RESET. Configuración borrada, reinicia el nodo.", 'r');
+                            mostrarInfo("Configuración borrada. Reinicia.");
+                        } else if (cmd.equalsIgnoreCase("GETID")) {
+                            // Responder con el ID de este nodo al origen
+                            String respuesta = String(configLora.IDLora);
+                            // Enviar respuesta estructurada de vuelta al origen
+                            enviarComandoEstructurado(orig, redCmd, "ID:" + respuesta);
+                            imprimirSerial("Comando recibido: GETID. Respondiendo con mi ID: " + respuesta, 'g');
+                            mostrarMensajeRecibido(orig, "Mi ID: " + respuesta);
+                        } else {
+                            mostrarMensajeRecibido(orig, cmd); 
+                        }
                     } else {
                         mostrarMensajeRecibido(orig, cuerpo); 
                     }
