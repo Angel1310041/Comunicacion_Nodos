@@ -11,7 +11,7 @@
 // --- Variables globales ---
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 bool tieneInternet = true; // Pon true en la placa que tiene internet
-String Version = "1.4.2.1";
+String Version = "1.4.2.2";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 
@@ -146,6 +146,25 @@ if (!comandoSerial.isEmpty()) {
     }
     vTaskDelete(NULL);
 }
+
+void tareaProcesarComandosLoRa(void *pvParameters) {
+  while (true) {
+    if (receivedFlag) {
+      receivedFlag = false;
+      String msg;
+      int state = lora.readData(msg);
+      if (state == RADIOLIB_ERR_NONE) {
+        imprimirSerial("Comando recibido por LoRa: " + msg, 'b');
+        Hardware::manejarComandoPorFuente("lora");
+        ManejoComunicacion::procesarComando(msg); // <-- Aquí se procesa/aplica el comando recibido por LoRa
+        ultimoComandoRecibido = msg;
+      }
+      lora.startReceive();
+    }
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+}
+
 
 // --- SETUP ---
 void setup() {
