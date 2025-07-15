@@ -67,3 +67,19 @@ void Hardware::manejoEstrobo(int pin, int freq, int delayTime) {
     vTaskDelay(delayTime / portTICK_PERIOD_MS);
   }
 }
+
+void Hardware::manejarComandoPorFuente(const String& fuente) {
+  if (fuente == "wifi") {
+    // Enciende 2 veces cada 300 ms
+    Hardware::blinkPin(LED_STATUS, 2, 300);
+  } else if (fuente == "serial") {
+    // Enciende 3 veces cada 200 ms
+    Hardware::blinkPin(LED_STATUS, 3, 200);
+  } else if (fuente == "lora") {
+    // Enciende 1 vez durante 600 ms
+    // Usamos manejoEstrobo para un solo ciclo de 600 ms
+    Hardware::manejoEstrobo(LED_STATUS, 1, 600);
+  } else {
+    imprimirSerial("Fuente de comando desconocida", 'y');
+  }
+}
