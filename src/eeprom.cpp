@@ -1,6 +1,8 @@
 #include "config.h"
 #include "eeprom.h"
 
+#define JSON_FILE "/condicionalesGPIO.json"
+
 Preferences eeprom;
 const int EEPROM_SIZE = 512;
 const int DIRECCION_INICIO_CONFIG = 0;
@@ -50,20 +52,20 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
 
   for (int i = 0; i < 6; ++i) {
     if (tarjeta.PinesGPIO[i] == 1) {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como entrada", 'c');
+      imprimirSerial("o- Pin " + String(pinNames[i]) + " configurado como entrada", 'c');
     } else if (tarjeta.PinesGPIO[i] == 2) {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como salida", 'c');
+      imprimirSerial("o- Pin " + String(pinNames[i]) + " configurado como salida", 'c');
     } else {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " no especificado", 'y');
+      imprimirSerial("o- Pin " + String(pinNames[i]) + " no especificado", 'y');
     }
   }
 }
 
 void ManejoEEPROM::tarjetaNueva() {
   ManejoEEPROM::leerTarjetaEEPROM();
-  if (tarjeta.magic != 0xDEADBEEF) {
+  if (tarjeta.magic != 0xDAC0FFEE) {
     imprimirSerial("Esta tarjeta es nueva, comenzando formateo...", 'c');
-    tarjeta.magic = 0xDEADBEEF;
+    tarjeta.magic = 0xDAC0FFEE;
     strcpy(tarjeta.IDLora, "001");
     tarjeta.Canal = 1;
     tarjeta.Pantalla = false;
@@ -71,8 +73,8 @@ void ManejoEEPROM::tarjetaNueva() {
     tarjeta.I2C = false;
     tarjeta.DEBUG = true;
     tarjeta.WiFi = true;
-    strcpy(tarjeta.PinesGPIO, "IIIIII");
-    strcpy(tarjeta.FlancosGPIO, "NNNNNN");
+    //strcpy(tarjeta.PinesGPIO, "IIIIII");
+    //strcpy(tarjeta.FlancosGPIO, "NNNNNN");
 
     ManejoEEPROM::guardarTarjetaConfigEEPROM();
 
@@ -81,4 +83,31 @@ void ManejoEEPROM::tarjetaNueva() {
   } else {
     imprimirSerial("\n\t\t\t<<< Tarjeta lista para utilizarse >>>", 'y');
   }
+}
+
+//* Condicionales GPIO *//
+void guardarCondicionalJSON(const String& parametro) {
+  if (!SPIFFS.begin(true)) {
+    imprimirSerial("\nError al montar SPIFFS\n", 'r');
+    return;
+  }
+
+  // Crear documento JSON si no esta creado
+  StaticJsonDocument<1024> docCondicionales;
+  File file = SPIFFS.open(JSON_FILE, FILE_READ);
+
+  if (file) {
+    // Si el archivo existe cargarlo
+    DeserializationError error = deserializeJson(docCondicionales, file);
+    file.close();
+    if (error || !docCondicionales.containsKey("condicionalesGPIO") || !docCondicionales["condicionalesGPIO"].is<JsonArray>()) {
+      docCondicionales.clear();
+      docCondicionales.createNestedArray("condicionalesGPIO");
+    }
+  } else {
+    docCondicionales.createNestedArray("condicionalesGPIO");
+  }
+
+  // Agregar parametro condicional
+  JsonArray condicionales = docCondicionales["condicionalesGPIO"].as<JsonArray>();
 }

@@ -11,8 +11,8 @@
     bool I2C;
     bool WiFi;
     bool DEBUG;
-    char PinesGPIO[6];
-    char FlancosGPIO[6];
+    char PinesGPIO[6];    // Entradas o Salidas
+    char FlancosGPIO[6];  // GND o VCC
   };
 
   struct Network {
@@ -36,6 +36,11 @@
       // Escritura de la EEPROM
       static void guardarTarjetaConfigEEPROM();
       static void tarjetaNueva();
+
+      // Lectura SPIFFS
+
+      // Escritura SPIFFS
+      void guardarCondicionalJSON(const String& formula);
   };
 
 #endif
