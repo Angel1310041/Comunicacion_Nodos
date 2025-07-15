@@ -4,7 +4,7 @@
 #include "comunicacion.h"
 #include "interfaz.h"
 
-String Version = "1.4.1.5";
+String Version = "1.5.0.0";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
@@ -12,6 +12,7 @@ String mensaje = "";
 bool modoProgramacion = false;
 
 TaskHandle_t tareaComandosSerial;
+TaskHandle_t tareaComandosVecinal;
 
 void imprimirSerial(String mensaje, char color) {
   String colorCode;
@@ -43,6 +44,7 @@ void setup() {
   ManejoComunicacion::inicializar();
 
   TaskHandle_t tareaComandosSerial = NULL;
+  TaskHandle_t tareaComandosVecinal = NULL;
 
   imprimirSerial("Lora iniciada correctamente\n", 'g');
   imprimirSerial("ID de este nodo: " + String(tarjeta.IDLora));
@@ -68,6 +70,25 @@ void recibirComandoSerial(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
+void recibirComandosVecinal(void *pvParameters) {
+  imprimirSerial("Esperando comandos por UART (Vecinal)...");
+  tareaComandosVecinal = xTaskGetCurrentTaskHandle();
+  String comandoVecinal = "";
+
+  while (true) {
+    comandoVecinal = ManejoComunicacion::leerVecinal();
+    if (!comandoVecinal.isEmpty()) {
+      ManejoComunicacion::procesarComando(comandoVecinal);
+      ultimoComandoRecibido = comandoVecinal;
+    } else if (comandoVecinal == ultimoComandoRecibido) {
+      comandoVecinal = "";
+    } 
+    esp_task_wdt_reset();
+    vTaskDelay(3000);
+  }
+  vTaskDelete(NULL);
+}
+
 void loop() {
   if (!modoProgramacion && tareaComandosSerial == NULL && tarjeta.DEBUG) {
     imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
@@ -78,6 +99,20 @@ void loop() {
       NULL,
       1,
       &tareaComandosSerial,
+      0
+    );
+    imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
+  }
+
+  if (!modoProgramacion && tareaComandosVecinal == NULL && tarjeta.UART) {
+    imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
+    xTaskCreatePinnedToCore(
+      recibirComandoSerial,
+      "Comandos Seriales",
+      5120,
+      NULL,
+      1,
+      &tareaComandosVecinal,
       0
     );
     imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
