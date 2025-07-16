@@ -82,13 +82,22 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
   }
 }
 
+void ManejoEEPROM::borrarTarjetaConfigEEPROM() {
+    eeprom.begin("EEPROM_PPAL", false);
+    eeprom.clear();
+    eeprom.end();
+    Serial.println("Configuración borrada. Reinicia el dispositivo o espera...");
+    delay(1000);
+    ESP.restart();
+}
+
 void ManejoEEPROM::tarjetaNueva() {
   ManejoEEPROM::leerTarjetaEEPROM();
   if (configLora.magic != 0xDEADBEEF) {
     imprimirSerial("Esta tarjeta es nueva, comenzando formateo...", 'c');
     configLora.magic = 0xDEADBEEF;
     strcpy(configLora.IDLora, "001");
-    configLora.Canal = 1;
+    configLora.Canal = 0;
     configLora.Pantalla = false;
     configLora.UART = true;
     configLora.I2C = false;

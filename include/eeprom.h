@@ -34,7 +34,7 @@ extern LoRaConfig configLora;
     public:
       // Lectura de la EEPROM
       static void leerTarjetaEEPROM();
-
+      static void borrarTarjetaConfigEEPROM();
       // Escritura de la EEPROM
       static void guardarTarjetaConfigEEPROM();
       static void tarjetaNueva();

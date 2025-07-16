@@ -11,15 +11,15 @@
 // --- Variables globales ---
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 bool tieneInternet = true; // Pon true en la placa que tiene internet
-String Version = "1.4.2.2";
+String Version = "2.1.1.1";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 
-TaskHandle_t tareaComandosSerial;
-TaskHandle_t tareaComandosVecinal;
+TaskHandle_t tareaComandosSerial = NULL;
+TaskHandle_t tareaComandosVecinal = NULL;
+TaskHandle_t tareaComandosLoRa = NULL;
 
 extern String ultimoComandoRecibido; // Definida en comunicacion.cpp
-
 #define MSG_ID_BUFFER_SIZE 16
 String msgIdBuffer[MSG_ID_BUFFER_SIZE];
 int msgIdBufferIndex = 0;
@@ -80,11 +80,9 @@ void setFlag() { receivedFlag = true; }
 
 // --- Envío de mensajes con estructura nueva ---
 void enviarComandoEstructurado(const String& destino, char red, const String& comando) {
-    // Generar número aleatorio de 2 dígitos
     int numAzar = random(10, 99);
     String msg = destino + "@" + red + "@" + comando + "@" + String(numAzar);
 
-    // Enviar por LoRa (puedes adaptar para vecinal si es necesario)
     if (strcmp(destino.c_str(), configLora.IDLora) != 0 && comando.length() > 0) {
         String siguienteHop = destino, msgID = generarMsgID();
         char paquete[256];
@@ -96,7 +94,6 @@ void enviarComandoEstructurado(const String& destino, char red, const String& co
         int resultado = lora.transmit(paquete);
         if (resultado == RADIOLIB_ERR_NONE) {
             imprimirSerial("Comando enviado correctamente.", 'g');
-            // Cambia el parpadeo simple por el estrobo de envío por LoRa
             Hardware::manejarComandoPorFuente("lora");
             guardarMsgID(msgID); mostrarMensajeEnviado(destino, msg);
         } else {
@@ -115,56 +112,103 @@ void recibirComandoSerial(void *pvParameters) {
     imprimirSerial("Esperando comandos por Serial...", 'b');
     tareaComandosSerial = xTaskGetCurrentTaskHandle();
     String comandoSerial = "";
-
+    String respuesta;
     while (true) {
         comandoSerial = ManejoComunicacion::leerSerial();
         comandoSerial.trim();
 
-if (!comandoSerial.isEmpty()) {
-    imprimirSerial("Comando recibido por Serial: " + comandoSerial, 'y');
-    Hardware::manejarComandoPorFuente("serial");
-    // Espera comandos en formato: ID@R@CMD
-    int idx1 = comandoSerial.indexOf('@');
-    int idx2 = comandoSerial.indexOf('@', idx1 + 1);
-    int idx3 = comandoSerial.indexOf('@', idx2 + 1);
-    if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
-        String destino = comandoSerial.substring(0, idx1);
-        char red = comandoSerial.charAt(idx1 + 1);
-        String comando = comandoSerial.substring(idx2 + 1, idx3);
-        // El número aleatorio se ignora al enviar, se genera nuevo
-        enviarComandoEstructurado(destino, red, comando);
-        // --- PROCESA EL COMANDO LOCALMENTE TAMBIÉN ---
-        ManejoComunicacion::procesarComando(comandoSerial);
-    } else {
-        imprimirSerial("Formato inválido. Usa: ID@R@CMD@##", 'r');
-        mostrarInfo("Formato invalido. Usa: ID@R@CMD@##");
-    }
-    ultimoComandoRecibido = comandoSerial;
-}
+        if (!comandoSerial.isEmpty()) {
+            imprimirSerial("Comando recibido por Serial: " + comandoSerial, 'y');
+            Hardware::manejarComandoPorFuente("serial");
+            int idx1 = comandoSerial.indexOf('@');
+            int idx2 = comandoSerial.indexOf('@', idx1 + 1);
+            int idx3 = comandoSerial.indexOf('@', idx2 + 1);
+            if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
+                String destino = comandoSerial.substring(0, idx1);
+                char red = comandoSerial.charAt(idx1 + 1);
+                String comando = comandoSerial.substring(idx2 + 1, idx3);
+                enviarComandoEstructurado(destino, red, comando);
+                ManejoComunicacion::procesarComando(comandoSerial, respuesta);
+                if (!respuesta.isEmpty()) {
+                    imprimirSerial("Respuesta: " + respuesta, 'g');
+                }
+            } else {
+                imprimirSerial("Formato inválido. Usa: ID@R@CMD@##", 'r');
+                mostrarInfo("Formato invalido. Usa: ID@R@CMD@##");
+            }
+            ultimoComandoRecibido = comandoSerial;
+        }
         esp_task_wdt_reset();
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
 
-void tareaProcesarComandosLoRa(void *pvParameters) {
-  while (true) {
-    if (receivedFlag) {
-      receivedFlag = false;
-      String msg;
-      int state = lora.readData(msg);
-      if (state == RADIOLIB_ERR_NONE) {
-        imprimirSerial("Comando recibido por LoRa: " + msg, 'b');
-        Hardware::manejarComandoPorFuente("lora");
-        ManejoComunicacion::procesarComando(msg); // <-- Aquí se procesa/aplica el comando recibido por LoRa
-        ultimoComandoRecibido = msg;
-      }
-      lora.startReceive();
+void recibirComandosLoRa(void *pvParameters) {
+    imprimirSerial("Esperando comandos por LoRa...", 'b');
+    tareaComandosLoRa = xTaskGetCurrentTaskHandle();
+    String msg;
+
+    while (true) {
+        if (receivedFlag) {
+            receivedFlag = false;
+            int state = lora.readData(msg);
+            Hardware::manejarComandoPorFuente("lora");
+            if (state == RADIOLIB_ERR_NONE) {
+                imprimirSerial("Comando recibido por LoRa: " + msg, 'c');
+                int idxMsg = msg.indexOf("MSG:");
+                int idxPipe = msg.indexOf("|", idxMsg);
+                if (idxMsg != -1) {
+                    String comandoRecibido;
+                    String respuesta;
+                    if (idxPipe != -1)
+                        comandoRecibido = msg.substring(idxMsg + 4, idxPipe);
+                    else
+                        comandoRecibido = msg.substring(idxMsg + 4);
+                    comandoRecibido.trim();
+                    int idx1 = comandoRecibido.indexOf('@');
+                    int idx2 = comandoRecibido.indexOf('@', idx1 + 1);
+                    int idx3 = comandoRecibido.indexOf('@', idx2 + 1);
+                    if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
+                        ManejoComunicacion::procesarComando(comandoRecibido, respuesta);
+                        ultimoComandoRecibido = comandoRecibido;
+                    } else {
+                        imprimirSerial("Mensaje LoRa recibido no es un comando válido: " + comandoRecibido, 'y');
+                    }
+                } else {
+                    imprimirSerial("Paquete LoRa recibido sin campo MSG: " + msg, 'y');
+                }
+            }
+            lora.startReceive();
+            mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
+        }
+        esp_task_wdt_reset();
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-  }
+    vTaskDelete(NULL);
 }
 
+void recibirComandosVecinal(void *pvParameters) {
+  imprimirSerial("Esperando comandos por UART (Vecinal)...", 'b');
+  tareaComandosVecinal = xTaskGetCurrentTaskHandle();
+  String comandoVecinal = "";
+  String respuesta;
+  while (true) {
+    comandoVecinal = ManejoComunicacion::leerVecinal();
+    if (!comandoVecinal.isEmpty()) {
+      ManejoComunicacion::procesarComando(comandoVecinal, respuesta);
+      ultimoComandoRecibido = comandoVecinal;
+      if (!respuesta.isEmpty()) {
+        imprimirSerial("Respuesta: " + respuesta, 'g');
+      }
+    } else if (comandoVecinal == ultimoComandoRecibido) {
+      comandoVecinal = "";
+    }
+    esp_task_wdt_reset();
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+  }
+  vTaskDelete(NULL);
+}
 
 // --- SETUP ---
 void setup() {
@@ -177,14 +221,26 @@ void setup() {
 
     Hardware::inicializar();
     ManejoComunicacion::inicializar();
-    cargarConfig();
+    ManejoEEPROM::leerTarjetaEEPROM(); // <--- SOLO ESTA FUNCION PARA CARGAR CONFIG
     configurarDisplay(configLora.displayOn);
 
-    if (strlen(configLora.IDLora) == 0) { pedirID(); guardarConfig(); }
-    else { imprimirSerial("ID cargado de memoria: " + String(configLora.IDLora), 'g'); mostrarInfo("ID cargado: " + String(configLora.IDLora)); }
+    if (strlen(configLora.IDLora) == 0) {
+        imprimirSerial("ID no encontrado en memoria, usando valor por defecto.", 'r');
+        strcpy(configLora.IDLora, "001");
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+    } else {
+        imprimirSerial("ID cargado de memoria: " + String(configLora.IDLora), 'g');
+        mostrarInfo("ID cargado: " + String(configLora.IDLora));
+    }
 
-    if (configLora.Canal < 0 || configLora.Canal > 8) { pedirCanal(); guardarConfig(); }
-    else { imprimirSerial("Canal cargado de memoria: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)", 'g'); mostrarInfo("Canal cargado: " + String(configLora.Canal)); }
+    if (configLora.Canal < 0 || configLora.Canal > 8) {
+        imprimirSerial("Canal no válido en memoria, usando valor por defecto.", 'r');
+        configLora.Canal = 0;
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+    } else {
+        imprimirSerial("Canal cargado de memoria: " + String(configLora.Canal) + " (" + String(canales[configLora.Canal], 1) + " MHz)", 'g');
+        mostrarInfo("Canal cargado: " + String(configLora.Canal));
+    }
 
     if (lora.begin(canales[configLora.Canal]) != RADIOLIB_ERR_NONE) {
         imprimirSerial("LoRa init failed!", 'r'); mostrarError("LoRa init failed!"); while (true);
@@ -203,7 +259,6 @@ void setup() {
 
     mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
 
-    // Iniciar tarea de comandos seriales si está en modo debug y no en modo programación
     if (!modoProgramacion && tareaComandosSerial == NULL && configLora.DEBUG) {
       imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
       xTaskCreatePinnedToCore(
@@ -217,27 +272,20 @@ void setup() {
       );
       imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
     }
-}
 
-void recibirComandosVecinal(void *pvParameters) {
-  imprimirSerial("Esperando comandos por UART (Vecinal)...");
-  tareaComandosVecinal = xTaskGetCurrentTaskHandle();
-  String comandoVecinal = "";
-
-  while (true) {
-    comandoVecinal = ManejoComunicacion::leerVecinal();
-    if (!comandoVecinal.isEmpty()) {
-      // Aquí podrías agregar un estrobo especial si lo deseas para UART vecinal
-      // Hardware::manejarComandoPorFuente("vecinal");
-      ManejoComunicacion::procesarComando(comandoVecinal);
-      ultimoComandoRecibido = comandoVecinal;
-    } else if (comandoVecinal == ultimoComandoRecibido) {
-      comandoVecinal = "";
-    } 
-    esp_task_wdt_reset();
-    vTaskDelay(3000);
-  }
-  vTaskDelete(NULL);
+    if (!modoProgramacion && tareaComandosLoRa == NULL) {
+      imprimirSerial("Iniciando tarea de recepcion de comandos LoRa...", 'c');
+      xTaskCreatePinnedToCore(
+        recibirComandosLoRa,
+        "Comandos LoRa",
+        5120,
+        NULL,
+        1,
+        &tareaComandosLoRa,
+        0
+      );
+      imprimirSerial("Tarea de recepcion de comandos LoRa iniciada", 'c');
+    }
 }
 
 // --- LOOP ---
@@ -270,10 +318,23 @@ void loop() {
     imprimirSerial("Tarea de recepcion de comandos Vecinal iniciada", 'c');
   }
 
+  if (!modoProgramacion && tareaComandosLoRa == NULL) {
+    imprimirSerial("Iniciando tarea de recepcion de comandos LoRa...", 'c');
+    xTaskCreatePinnedToCore(
+      recibirComandosLoRa,
+      "Comandos LoRa",
+      5120,
+      NULL,
+      1,
+      &tareaComandosLoRa,
+      0
+    );
+    imprimirSerial("Tarea de recepcion de comandos LoRa iniciada", 'c');
+  }
+
   static unsigned long ultimoSondeo = 0, tiempoMostrar = 0;
   static bool esperandoMostrar = false, sondeoManual = false;
 
-  // Sondeo automático/manual
   if (tieneInternet) {
       if (millis() - ultimoSondeo > 600000 && !sondeoManual) {
           limpiarNodosActivos(); enviarSondeo();
@@ -285,27 +346,5 @@ void loop() {
       }
   }
 
-  // Recepción de mensajes LoRa: solo para sondeo y registro de nodos activos
-  if (receivedFlag) {
-      receivedFlag = false;
-      String msg;
-      int state = lora.readData(msg);
-      if (state == RADIOLIB_ERR_NONE) {
-          responderSondeo(msg);
-          imprimirSerial("Recibido: " + msg, 'b');
-          if (tieneInternet && msg.startsWith("RESPUESTA|ID:")) {
-              int idxIni = msg.indexOf("RESPUESTA|ID:") + 13, idxFin = msg.indexOf("|CANAL:");
-              if (idxIni != -1 && idxFin != -1 && idxFin > idxIni) {
-                  String idNodo = msg.substring(idxIni, idxFin);
-                  if (idNodo != String(configLora.IDLora)) {
-                      agregarNodoActivo(idNodo);
-                      imprimirSerial("Nodo activo detectado: " + idNodo, 'g');
-                  }
-              }
-          }
-      }
-      lora.startReceive();
-      mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
-  }
   delay(100); // Pequeño delay para evitar saturar el loop
 }
