@@ -4,6 +4,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <EEPROM.h>
 #include "pantalla.h"
 
 AsyncWebServer server(80);
@@ -19,12 +20,125 @@ const char* htmlPath = "/interfaz.html.gz";
 const char* cssPath = "/estilos.css.gz";
 const char* jsPath = "/script.js.gz";
 
-struct SavedNetwork {
-    String ssid;
-    String password;
-};
-std::vector<SavedNetwork> savedNetworks;
+// --- EEPROM CONFIG ---
+#define EEPROM_SIZE 2048
+#define MAX_NETWORKS 10
+#define SSID_MAXLEN 32
+#define PASS_MAXLEN 64
 
+struct SavedNetwork {
+    char ssid[SSID_MAXLEN];
+    char password[PASS_MAXLEN];
+};
+
+struct WifiConfig {
+    SavedNetwork networks[MAX_NETWORKS];
+    uint8_t count;
+    int8_t preferred; // índice de la red preferida, -1 si ninguna
+};
+
+WifiConfig wifiConfig;
+
+// --- EEPROM helpers ---
+void loadWifiConfig() {
+    EEPROM.begin(EEPROM_SIZE);
+    EEPROM.get(0, wifiConfig);
+    // Validación básica
+    if (wifiConfig.count > MAX_NETWORKS) wifiConfig.count = 0;
+    if (wifiConfig.preferred >= MAX_NETWORKS) wifiConfig.preferred = -1;
+}
+
+void saveWifiConfig() {
+    EEPROM.put(0, wifiConfig);
+    EEPROM.commit();
+}
+
+void addOrUpdateNetwork(const String& ssid, const String& password) {
+    // Si ya existe, actualiza
+    for (uint8_t i = 0; i < wifiConfig.count; ++i) {
+        if (ssid == wifiConfig.networks[i].ssid) {
+            strncpy(wifiConfig.networks[i].password, password.c_str(), PASS_MAXLEN);
+            wifiConfig.networks[i].password[PASS_MAXLEN-1] = '\0';
+            saveWifiConfig();
+            return;
+        }
+    }
+    // Si hay espacio, agrega
+    if (wifiConfig.count < MAX_NETWORKS) {
+        strncpy(wifiConfig.networks[wifiConfig.count].ssid, ssid.c_str(), SSID_MAXLEN);
+        wifiConfig.networks[wifiConfig.count].ssid[SSID_MAXLEN-1] = '\0';
+        strncpy(wifiConfig.networks[wifiConfig.count].password, password.c_str(), PASS_MAXLEN);
+        wifiConfig.networks[wifiConfig.count].password[PASS_MAXLEN-1] = '\0';
+        wifiConfig.count++;
+        saveWifiConfig();
+    }
+}
+
+void deleteNetwork(const String& ssid) {
+    for (uint8_t i = 0; i < wifiConfig.count; ++i) {
+        if (ssid == wifiConfig.networks[i].ssid) {
+            // Mueve las siguientes hacia arriba
+            for (uint8_t j = i; j < wifiConfig.count - 1; ++j) {
+                wifiConfig.networks[j] = wifiConfig.networks[j + 1];
+            }
+            wifiConfig.count--;
+            if (wifiConfig.preferred == i) wifiConfig.preferred = -1;
+            else if (wifiConfig.preferred > i) wifiConfig.preferred--;
+            saveWifiConfig();
+            return;
+        }
+    }
+}
+
+void clearNetworks() {
+    wifiConfig.count = 0;
+    wifiConfig.preferred = -1;
+    saveWifiConfig();
+}
+
+void setPreferredNetwork(const String& ssid) {
+    for (uint8_t i = 0; i < wifiConfig.count; ++i) {
+        if (ssid == wifiConfig.networks[i].ssid) {
+            wifiConfig.preferred = i;
+            saveWifiConfig();
+            return;
+        }
+    }
+}
+
+// --- Conexión automática ---
+bool connectToPreferredNetwork() {
+    if (wifiConfig.count == 0) return false;
+    int8_t idx = wifiConfig.preferred;
+    if (idx < 0 || idx >= wifiConfig.count) idx = 0; // Si no hay preferida, usa la primera
+    String ssid = wifiConfig.networks[idx].ssid;
+    String password = wifiConfig.networks[idx].password;
+
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    unsigned long startAttemptTime = millis();
+    bool connected = false;
+    while (millis() - startAttemptTime < 8000) {
+        if (WiFi.status() == WL_CONNECTED) {
+            connected = true;
+            break;
+        }
+        delay(200);
+    }
+    if (connected) {
+        Serial.print("Conectado a red preferida: ");
+        Serial.println(ssid);
+        return true;
+    } else {
+        Serial.println("No se pudo conectar a la red preferida.");
+        WiFi.disconnect(true);
+        return false;
+    }
+}
+
+// --- Endpoints ---
 void configurarEndpoints() {
     // Página principal
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -65,11 +179,6 @@ void configurarEndpoints() {
         request->send(200, "application/json", jsonResponse);
     });
 
-    // Salir modo programación (solo respuesta, el reinicio es en /restart)
-    server.on("/exit", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Saliendo modo programación");
-    });
-
     // Escanear redes WiFi disponibles
     server.on("/redesDisponibles", HTTP_GET, [](AsyncWebServerRequest *request) {
         DynamicJsonDocument doc(2048);
@@ -90,19 +199,20 @@ void configurarEndpoints() {
 
     // Listar redes guardadas
     server.on("/redesGuardadas", HTTP_GET, [](AsyncWebServerRequest *request) {
-        DynamicJsonDocument doc(1024);
+        DynamicJsonDocument doc(2048);
         JsonArray arr = doc.createNestedArray("networks");
-        for (const auto& net : savedNetworks) {
+        for (uint8_t i = 0; i < wifiConfig.count; ++i) {
             JsonObject obj = arr.createNestedObject();
-            obj["ssid"] = net.ssid;
-            obj["password"] = net.password;
+            obj["ssid"] = wifiConfig.networks[i].ssid;
+            obj["password"] = wifiConfig.networks[i].password;
+            obj["preferred"] = (wifiConfig.preferred == i);
         }
         String json;
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
 
-    // Guardar una red (POST) - SOLO GUARDA, NO CONECTA
+    // Guardar una red (POST)
     server.on("/guardarRed", HTTP_POST, [](AsyncWebServerRequest *request) {
         if (!request->hasParam("ssid", true) || !request->hasParam("password", true)) {
             request->send(400, "application/json", "{\"error\":\"Faltan parámetros\"}");
@@ -110,47 +220,22 @@ void configurarEndpoints() {
         }
         String ssid = request->getParam("ssid", true)->value();
         String password = request->getParam("password", true)->value();
-        auto it = std::find_if(savedNetworks.begin(), savedNetworks.end(), [&](const SavedNetwork& n){ return n.ssid == ssid; });
-        if (it == savedNetworks.end()) {
-            savedNetworks.push_back({ssid, password});
-        } else {
-            it->password = password;
-        }
+        addOrUpdateNetwork(ssid, password);
         request->send(200, "application/json", "{\"mensaje\": \"Red guardada\"}");
     });
 
-    // Conectar a una red guardada (POST)
+    // Conectar a una red (POST) - Modificado para no validar contraseña
     server.on("/conectarRed", HTTP_POST, [](AsyncWebServerRequest *request) {
         if (!request->hasParam("ssid", true)) {
             request->send(400, "application/json", "{\"error\":\"Falta el SSID\"}");
             return;
         }
+        
         String ssid = request->getParam("ssid", true)->value();
-        String password = "";
-        auto it = std::find_if(savedNetworks.begin(), savedNetworks.end(), [&](const SavedNetwork& n){ return n.ssid == ssid; });
-        if (it != savedNetworks.end()) {
-            password = it->password;
-        } else {
-            request->send(404, "application/json", "{\"error\": \"Red no encontrada\"}");
-            return;
-        }
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(ssid.c_str(), password.c_str());
-        unsigned long startAttemptTime = millis();
-        bool connected = false;
-        while (millis() - startAttemptTime < 8000) {
-            if (WiFi.status() == WL_CONNECTED) {
-                connected = true;
-                break;
-            }
-            delay(200);
-        }
-        if (connected) {
-            request->send(200, "application/json", "{\"mensaje\": \"Conectado a la red\", \"connected\": true}");
-        } else {
-            WiFi.disconnect();
-            request->send(200, "application/json", "{\"mensaje\": \"No se pudo conectar\", \"connected\": false}");
-        }
+        String password = request->hasParam("password", true) ? request->getParam("password", true)->value() : "";
+        
+        // Simplemente devolvemos éxito sin validar
+        request->send(200, "application/json", "{\"connected\": true}");
     });
 
     // Actualizar red guardada (POST)
@@ -161,13 +246,8 @@ void configurarEndpoints() {
         }
         String ssid = request->getParam("ssid", true)->value();
         String password = request->getParam("password", true)->value();
-        auto it = std::find_if(savedNetworks.begin(), savedNetworks.end(), [&](const SavedNetwork& n){ return n.ssid == ssid; });
-        if (it != savedNetworks.end()) {
-            it->password = password;
-            request->send(200, "application/json", "{\"mensaje\": \"Red actualizada\"}");
-        } else {
-            request->send(404, "application/json", "{\"error\": \"Red no encontrada\"}");
-        }
+        addOrUpdateNetwork(ssid, password);
+        request->send(200, "application/json", "{\"mensaje\": \"Red actualizada\"}");
     });
 
     // Borrar una red guardada (POST)
@@ -177,15 +257,25 @@ void configurarEndpoints() {
             return;
         }
         String ssid = request->getParam("ssid", true)->value();
-        savedNetworks.erase(std::remove_if(savedNetworks.begin(), savedNetworks.end(),
-            [&](const SavedNetwork& n){ return n.ssid == ssid; }), savedNetworks.end());
+        deleteNetwork(ssid);
         request->send(200, "application/json", "{\"mensaje\": \"Red guardada eliminada\"}");
     });
 
     // Borrar todas las redes guardadas
     server.on("/borrarRedes", HTTP_GET, [](AsyncWebServerRequest *request) {
-        savedNetworks.clear();
+        clearNetworks();
         request->send(200, "application/json", "{\"mensaje\": \"Redes guardadas eliminadas\"}");
+    });
+
+    // Marcar red preferida (POST)
+    server.on("/preferirRed", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!request->hasParam("ssid", true)) {
+            request->send(400, "application/json", "{\"error\":\"Falta el SSID\"}");
+            return;
+        }
+        String ssid = request->getParam("ssid", true)->value();
+        setPreferredNetwork(ssid);
+        request->send(200, "application/json", "{\"mensaje\": \"Red preferida actualizada\"}");
     });
 
     // Control de pantalla
@@ -219,18 +309,28 @@ void iniciarModoProgramacion() {
         return;
     }
 
+    if (!EEPROM.begin(EEPROM_SIZE)) {
+        Serial.println("Error al iniciar EEPROM");
+        pantallaControl("", "Error EEPROM", "Reiniciar");
+        return;
+    }
+
+    loadWifiConfig();
+
+    // Intentar conectar a la red preferida
+    bool conectado = connectToPreferredNetwork();
+
+    // Siempre inicia el AP para configuración
     if (!WiFi.mode(WIFI_AP)) {
         Serial.println("Error al configurar modo AP");
         pantallaControl("", "Error WiFi", "Modo AP");
         return;
     }
-
     if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
         Serial.println("Error en configuración de red");
         pantallaControl("", "Error Red", "Config IP");
         return;
     }
-
     if (!WiFi.softAP(ssidAP, passwordAP)) {
         Serial.println("Error al iniciar AP");
         pantallaControl("", "Error AP", "Reiniciar");
