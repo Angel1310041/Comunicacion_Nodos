@@ -25,7 +25,10 @@ const char* jsPath = "/script.js.gz";
 #define MAX_NETWORKS 10
 #define SSID_MAXLEN 32
 #define PASS_MAXLEN 64
+String version="2.1.3.4";
 
+
+//----Estructura de el wifi para guardar las redes 
 struct SavedNetwork {
     char ssid[SSID_MAXLEN];
     char password[PASS_MAXLEN];
@@ -34,7 +37,7 @@ struct SavedNetwork {
 struct WifiConfig {
     SavedNetwork networks[MAX_NETWORKS];
     uint8_t count;
-    int8_t preferred; // índice de la red preferida, -1 si ninguna
+    int8_t preferred;
 };
 
 WifiConfig wifiConfig;
@@ -106,7 +109,7 @@ void setPreferredNetwork(const String& ssid) {
     }
 }
 
-// --- Conexión automática ---
+// --- Conexión de la red wifi ---
 bool connectToPreferredNetwork() {
     if (wifiConfig.count == 0) return false;
     int8_t idx = wifiConfig.preferred;
