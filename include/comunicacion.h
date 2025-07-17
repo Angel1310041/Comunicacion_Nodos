@@ -2,8 +2,6 @@
   #define COMUNICACION_H
   #include "config.h"
 
-void enviarSondeo();
-void responderSondeo(const String &msg);
   class ManejoComunicacion {
     public:
       static void inicializar();

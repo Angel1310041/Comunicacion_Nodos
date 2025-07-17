@@ -8,9 +8,7 @@
 #include "eeprom.h"
 #include "hardware.h"
 
-// --- Variables globales ---
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
-bool tieneInternet = true; // Pon true en la placa que tiene internet
 String Version = "2.1.1.1";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
@@ -19,7 +17,7 @@ TaskHandle_t tareaComandosSerial = NULL;
 TaskHandle_t tareaComandosVecinal = NULL;
 TaskHandle_t tareaComandosLoRa = NULL;
 
-extern String ultimoComandoRecibido; // Definida en comunicacion.cpp
+extern String ultimoComandoRecibido; 
 #define MSG_ID_BUFFER_SIZE 16
 String msgIdBuffer[MSG_ID_BUFFER_SIZE];
 int msgIdBufferIndex = 0;
@@ -29,7 +27,6 @@ String nodosActivos[MAX_NODOS_ACTIVOS];
 int numNodosActivos = 0;
 String mensaje = "";
 
-// --- Utilidades de impresión con color ---
 void imprimirSerial(String mensaje, char color) {
   String colorCode;
   switch (color) {
@@ -47,7 +44,6 @@ void imprimirSerial(String mensaje, char color) {
   Serial.print("\033[0m"); // Resetear color
 }
 
-// --- Utilidades para nodos activos y mensajes ---
 void agregarNodoActivo(const String& id) {
     for (int i = 0; i < numNodosActivos; i++)
         if (nodosActivos[i] == id) return;
@@ -78,7 +74,6 @@ void guardarMsgID(const String& msgId) {
 
 void setFlag() { receivedFlag = true; }
 
-// --- Envío de mensajes con estructura nueva ---
 void enviarComandoEstructurado(const String& destino, char red, const String& comando) {
     int numAzar = random(10, 99);
     String msg = destino + "@" + red + "@" + comando + "@" + String(numAzar);
@@ -107,7 +102,6 @@ void enviarComandoEstructurado(const String& destino, char red, const String& co
     }
 }
 
-// --- Tarea para comandos seriales (FreeRTOS) ---
 void recibirComandoSerial(void *pvParameters) {
     imprimirSerial("Esperando comandos por Serial...", 'b');
     tareaComandosSerial = xTaskGetCurrentTaskHandle();
@@ -210,9 +204,8 @@ void recibirComandosVecinal(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
-// --- SETUP ---
 void setup() {
-    configLora.DEBUG = true; // Habilitar debug por defecto
+    configLora.DEBUG = true; 
     Serial.begin(9600);
     delay(1000);
 
@@ -221,7 +214,7 @@ void setup() {
 
     Hardware::inicializar();
     ManejoComunicacion::inicializar();
-    ManejoEEPROM::leerTarjetaEEPROM(); // <--- SOLO ESTA FUNCION PARA CARGAR CONFIG
+    ManejoEEPROM::leerTarjetaEEPROM(); 
     configurarDisplay(configLora.displayOn);
 
     if (strlen(configLora.IDLora) == 0) {
@@ -288,7 +281,6 @@ void setup() {
     }
 }
 
-// --- LOOP ---
 void loop() {
   if (!modoProgramacion && tareaComandosSerial == NULL && configLora.DEBUG) {
     imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
@@ -332,19 +324,5 @@ void loop() {
     imprimirSerial("Tarea de recepcion de comandos LoRa iniciada", 'c');
   }
 
-  static unsigned long ultimoSondeo = 0, tiempoMostrar = 0;
-  static bool esperandoMostrar = false, sondeoManual = false;
-
-  if (tieneInternet) {
-      if (millis() - ultimoSondeo > 600000 && !sondeoManual) {
-          limpiarNodosActivos(); enviarSondeo();
-          ultimoSondeo = millis(); tiempoMostrar = millis(); esperandoMostrar = true;
-      }
-      if (esperandoMostrar && millis() - tiempoMostrar > 5000) {
-          mostrarNodosActivos();
-          esperandoMostrar = false; sondeoManual = false;
-      }
-  }
-
-  delay(100); // Pequeño delay para evitar saturar el loop
+  delay(100);
 }

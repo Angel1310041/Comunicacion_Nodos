@@ -39,12 +39,6 @@
 extern Preferences preferences;
 extern float canales[9];
 
-void guardarConfig();
-void cargarConfig();
-void borrarConfig();
-void pedirID();
-void pedirCanal();
-
   extern const int EEPROM_SIZE;
   extern String Version;
   extern const int pinNumbers[6];

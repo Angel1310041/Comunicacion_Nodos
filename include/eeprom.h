@@ -40,8 +40,5 @@ extern LoRaConfig configLora;
       static void tarjetaNueva();
   };
 
-  void guardarConfig();
-void cargarConfig();
-void borrarConfig();
 
 #endif
