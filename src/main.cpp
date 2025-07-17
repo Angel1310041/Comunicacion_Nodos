@@ -4,7 +4,7 @@
 #include "comunicacion.h"
 #include "interfaz.h"
 
-String Version = "1.5.2.4";
+String Version = "1.5.3.0";
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 

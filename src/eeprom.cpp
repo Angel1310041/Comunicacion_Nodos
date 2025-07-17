@@ -1,8 +1,6 @@
 #include "config.h"
 #include "eeprom.h"
 
-#define JSON_FILE "/condicionalesGPIO.json"
-
 Preferences eeprom;
 const int EEPROM_SIZE = 512;
 const int DIRECCION_INICIO_CONFIG = 0;
@@ -83,31 +81,4 @@ void ManejoEEPROM::tarjetaNueva() {
   } else {
     imprimirSerial("\n\t\t\t<<< Tarjeta lista para utilizarse >>>", 'y');
   }
-}
-
-//* Condicionales GPIO *//
-void guardarCondicionalJSON(const String& parametro) {
-  if (!SPIFFS.begin(true)) {
-    imprimirSerial("\nError al montar SPIFFS\n", 'r');
-    return;
-  }
-
-  // Crear documento JSON si no esta creado
-  StaticJsonDocument<1024> docCondicionales;
-  File file = SPIFFS.open(JSON_FILE, FILE_READ);
-
-  if (file) {
-    // Si el archivo existe cargarlo
-    DeserializationError error = deserializeJson(docCondicionales, file);
-    file.close();
-    if (error || !docCondicionales.containsKey("condicionalesGPIO") || !docCondicionales["condicionalesGPIO"].is<JsonArray>()) {
-      docCondicionales.clear();
-      docCondicionales.createNestedArray("condicionalesGPIO");
-    }
-  } else {
-    docCondicionales.createNestedArray("condicionalesGPIO");
-  }
-
-  // Agregar parametro condicional
-  JsonArray condicionales = docCondicionales["condicionalesGPIO"].as<JsonArray>();
 }
