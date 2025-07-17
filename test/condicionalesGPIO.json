@@ -1,0 +1,136 @@
+{
+  "condicionalesGPIO": [
+
+    { "1": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"O", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "2": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"P", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "3": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"Q", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "4": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"R", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "5": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"S", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "6": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"T", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "7": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"U", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "8": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"V", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "9": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"W", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "10": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"X", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "11": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"Y", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+    "CUMPLIDO": false },
+
+    { "12": [
+            {"PARAMETRO":"A", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"B", "PIN": 0, "FLANCO": "N", "ESTADO": false},
+            {"PARAMETRO":"C", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"D", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"E", "PIN": 0, "FLANCO": "N", "ESTADO": false}, 
+            {"PARAMETRO":"F", "PIN": 0, "FLANCO": "N", "ESTADO": false}
+          ],
+      "resultado": {"ACCION":"Z", "PIN":0, "FLANCO":"N", "ACTIVO": false},
+      "CUMPLIDO": false }
+  ]
+}

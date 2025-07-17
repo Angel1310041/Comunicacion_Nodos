@@ -55,6 +55,10 @@ void mostrarMensajeRecibido(const String& origen, const String& mensaje) {
     }
     Heltec.display->drawString(0, 30, "Msg: " + msgDisplay);
     Heltec.display->display();
+    // También imprimir por Serial
+    Serial.println("[DISPLAY] MSG Recibido!");
+    Serial.println("[DISPLAY] De: " + origen);
+    Serial.println("[DISPLAY] Msg: " + mensaje);
     delay(3000);
   }
 }
@@ -70,6 +74,10 @@ void mostrarMensajeEnviado(const String& destino, const String& mensaje) {
     }
     Heltec.display->drawString(0, 30, "Msg: " + msgDisplay);
     Heltec.display->display();
+    // También imprimir por Serial
+    Serial.println("[DISPLAY] MSG Enviado!");
+    Serial.println("[DISPLAY] A: " + destino);
+    Serial.println("[DISPLAY] Msg: " + mensaje);
     delay(2000);
   }
 }

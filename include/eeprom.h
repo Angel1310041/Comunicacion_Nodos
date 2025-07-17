@@ -12,8 +12,8 @@ struct LoRaConfig {
   bool I2C;
   bool WiFi;
   bool DEBUG;
-  char PinesGPIO[7];
-  char FlancosGPIO[7];
+  char PinesGPIO[6];
+  char FlancosGPIO[6];
 };
 
 extern LoRaConfig configLora;
@@ -38,6 +38,8 @@ extern LoRaConfig configLora;
       // Escritura de la EEPROM
       static void guardarTarjetaConfigEEPROM();
       static void tarjetaNueva();
+
+      void guardarCondicionalJSON(const String& formula);
   };
 
 

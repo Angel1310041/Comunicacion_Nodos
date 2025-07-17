@@ -2,13 +2,14 @@
 #define CONFIG_H
 
   #include <Arduino.h>
+  #include <SPIFFS.h>
   #include <SPI.h>
   #include <RadioLib.h>
   #include <heltec.h>
   #include <Preferences.h>
   #include <Wire.h>
   #include <esp_task_wdt.h>
-
+  #include <ArduinoJson.h>
 
 #define LORA_MOSI 10
 #define LORA_MISO 11

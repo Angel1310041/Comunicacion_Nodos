@@ -9,7 +9,7 @@
 #include "hardware.h"
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
-String Version = "2.1.1.1";
+String Version = "2.2.1.1";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 

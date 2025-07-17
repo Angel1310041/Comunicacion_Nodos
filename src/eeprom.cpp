@@ -49,11 +49,11 @@ void ManejoEEPROM::guardarTarjetaConfigEEPROM() {
 
   for (int i = 0; i < 6; ++i) {
     if (configLora.PinesGPIO[i] == 1) {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como entrada", 'b');
+      imprimirSerial("o- Pin " + String(pinNames[i]) + " configurado como entrada", 'c');
     } else if (configLora.PinesGPIO[i] == 2) {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " configurado como salida", 'b');
+      imprimirSerial("o- Pin " + String(pinNames[i]) + " configurado como salida", 'c');
     } else {
-      imprimirSerial("\tPin " + String(pinNames[i]) + " no especificado", 'y');
+      imprimirSerial("o- Pin " + String(pinNames[i]) + " no especificado", 'y');
     }
   }
 }
@@ -78,8 +78,8 @@ void ManejoEEPROM::tarjetaNueva() {
     configLora.UART = true;
     configLora.I2C = false;
     configLora.DEBUG = true;
-    strcpy(configLora.PinesGPIO, "IIIIII");
-    strcpy(configLora.FlancosGPIO, "NNNNNN");
+    //strcpy(configLora.PinesGPIO, "IIIIII");
+    //strcpy(configLora.FlancosGPIO, "NNNNNN");
 
     ManejoEEPROM::guardarTarjetaConfigEEPROM();
 
