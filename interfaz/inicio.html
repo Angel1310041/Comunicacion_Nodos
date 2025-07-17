@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Alarma</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<link rel="stylesheet" href="Estilo.css">
+<style>
+#submenuOverlay {
+position: fixed;
+top: 0; left: 0; width: 100vw; height: 100vh;
+background: rgba(0,0,0,0.15);
+z-index: 100;
+display: none;
+cursor: pointer;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal.active {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    padding: 20px;
+    border-radius: 5px;
+    width: 80%;
+    max-width: 500px;
+}
+
+.condicion-item {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.condicion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.delete-condicion {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+}
+
+.no-condiciones {
+    text-align: center;
+    color: #777;
+    font-style: italic;
+}
+</style>
+</head>
+<body>
+<header class="uno">
+<div class="dos" id="perro_dos">&#9776;</div>
+<div class="tres">
+<h1 class="cuatro">Configuración</h1>
+</div>
+</header>
+
+<aside class="cinco" id="perro_cinco">
+<h2 class="seis">Menú</h2>
+<nav class="siete" id="perro_siete">
+<ul>
+<li id="perro_ocho"><a href="#" data-section="inicio"><i class="fas fa-home menu-icon"></i> Inicio</a></li>
+<li><a href="#" data-section="datos"><i class="fas fa-database menu-icon"></i> Datos</a></li>
+<li><a href="#" data-section="funciones" id="perro_nueve"><i class="fas fa-tools menu-icon"></i> Funciones</a></li>
+<li><a href="#" data-section="salir"><i class="fas fa-sign-out-alt menu-icon"></i> Salir</a></li>
+</ul>
+</nav>
+</aside>
+
+<aside id="pantallaSubmenu" class="submenu-lateral">
+<h3 class="submenu-title">Funciones</h3>
+<ul>
+<li><a href="#" data-subsection="pantalla"><i class="fas fa-desktop menu-icon"></i> Pantalla</a></li>
+<li><a href="#" data-subsection="wifi"><i class="fas fa-wifi menu-icon"></i> WiFi</a></li>
+<li><a href="#" data-subsection="uart"><i class="fas fa-microchip menu-icon"></i> UART</a></li>
+<li><a href="#" data-subsection="i2c"><i class="fas fa-microchip menu-icon"></i> I2C</a></li>
+<li><a href="#" data-subsection="gpio"><i class="fas fa-th-large menu-icon"></i> GPIO</a></li>
+</ul>
+</aside>
+
+<aside id="gpioSubmenu" class="submenu-lateral gpio-submenu">
+<h3 class="submenu-title">GPIO</h3>
+<ul>
+<li><a href="#" data-subsection="gpio-archivos"><i class="fas fa-file-alt menu-icon"></i> Archivo</a></li>
+<li><a href="#" data-subsection="gpio-condicion"><i class="fas fa-code-branch menu-icon"></i> Condición</a></li>
+</ul>
+</aside>
+
+<div id="submenuOverlay"></div>
+
+<main class="once" id="perro_doce">
+<section id="inicio-section" class="doce">
+<div class="trece">
+<h2 class="catorce">Inicio</h2>
+</div>
+<div class="quince">
+<p class="dieciseis">Resumen</p>
+<p class="diecisiete">Estado de Pantalla: <strong id="perro_diecinueve" class="dieciocho">----</strong></p>
+<p class="diecisiete">Estado de WiFi: <strong id="perro_veintiuno" class="dieciocho">----</strong></p>
+<p class="diecisiete">ID del Dispositivo: <strong id="perro_id_value" class="dieciocho">---</strong></p>
+<p class="diecisiete">Canal LoRa: <strong id="perro_canal_value" class="dieciocho">---</strong></p>
+</div>
+</section>
+
+<section id="datos-section" class="doce">
+<div class="trece">
+<h2 class="catorce">Formulario</h2>
+</div>
+<div class="datos-form">
+<div class="form-group">
+<label for="idDispositivo">ID:</label>
+<input type="text" id="idDispositivo" class="form-input" maxlength="3" placeholder="Ej. ABC">
+</div>
+<div class="form-group">
+<label for="canalLoRa">Canal (0-8):</label>
+<input type="number" id="canalLoRa" class="form-input" min="0" max="8" placeholder="Ej. 1">
+</div>
+<div style="text-align: center; margin-top: 20px;">
+<button id="guardarDatos" class="action-button success-button">Guardar</button>
+<button id="restablecerDatos" class="action-button danger-button">Restablecer</button>
+</div>
+<p style="text-align: center; margin-top: 15px; font-style: italic;" id="datosStatus"></p>
+</div>
+</section>
+
+<section id="funciones-content" class="doce funciones-container"></section>
+</main>
+
+<div id="wifiPasswordModal" class="modal">
+<div class="modal-content">
+<span id="modalSsidName"></span>
+<input type="password" id="wifiPasswordInput" placeholder="Ingrese la contraseña">
+<div class="modal-buttons">
+<button id="connectWifiButton" class="confirm-button">Guardar</button>
+<button id="cancelWifiButton" class="cancel-button">Cancelar</button>
+</div>
+<div class="password-error" id="wifiPasswordError"></div>
+</div>
+</div>
+
+<script src="Script.js"></script>
+</body>
+</html>
