@@ -28,7 +28,8 @@
   #define PIN_IO6 7
   #define LED_STATUS 35
   #define BOTON_MODO_PROG 0
-  
+  #define RECEPTOR_RF 33
+
 #define UART_RX 46
 #define UART_TX 45
 

@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <RCSwitch.h>
 #include "config.h"
 #include "pantalla.h"
 #include "heltec.h"
@@ -12,6 +13,12 @@ extern bool tieneInternet;
 LoRaConfig configLora;
 String ultimoComandoRecibido = "";
 TwoWire I2CGral = TwoWire(1);
+
+volatile bool rfSignalReceived = false;
+unsigned long lastRFSignalTime = 0;
+
+// Instancia global de RCSwitch para RF
+static RCSwitch mySwitch = RCSwitch();
 
 // --- FUNCIONES PARA CONTROL DE PANTALLA ---
 void habilitarPantalla() {
@@ -28,11 +35,42 @@ void deshabilitarPantalla() {
     ManejoEEPROM::guardarTarjetaConfigEEPROM();
 }
 
+// --- Inicialización del receptor RF con rc-switch ---
+void ManejoComunicacion::initRFReceiver() {
+    mySwitch.enableReceive(RECEPTOR_RF); // RECEPTOR_RF debe ser el número de pin GPIO
+    imprimirSerial("Receptor RF RX500 inicializado con rc-switch en pin " + String(RECEPTOR_RF), 'g');
+}
+
+void ManejoComunicacion::leerRFReceiver() {
+    static unsigned long ultimoValor = 0; // Último valor recibido
+    static unsigned long ultimoTiempo = 0; // Último tiempo de impresión (ms)
+    const unsigned long intervalo = 200;   // Intervalo mínimo entre impresiones del mismo código (ms)
+
+    if (mySwitch.available()) {
+        unsigned long value = mySwitch.getReceivedValue();
+        unsigned long ahora = millis();
+
+        if (value == 0) {
+            Serial.println("Codigo desconocido recibido (demasiado corto o ruido)");
+        } else {
+            // Imprime si es un código nuevo o si han pasado al menos 200 ms desde la última impresión del mismo código
+            if (value != ultimoValor || (ahora - ultimoTiempo) >= intervalo) {
+                Serial.println("Codigo RF recibido: " + String(value));
+                ultimoValor = value;
+                ultimoTiempo = ahora;
+            }
+            // Si es igual y no ha pasado el tiempo, no imprime nada
+        }
+        mySwitch.resetAvailable();
+    }
+}
+
 void ManejoComunicacion::inicializar() {
     Serial.begin(9600);
     delay(1000);
     initI2C();
     initUART();
+    initRFReceiver();
 
     if (lora.begin() != RADIOLIB_ERR_NONE) {
         Serial.println("LoRa init failed!");
@@ -58,7 +96,6 @@ String ManejoComunicacion::leerVecinal() {
                 imprimirSerial("Comando recibido en Serial2: " + comandoVecinal, 'y');
                 return comandoVecinal;
             } else {
-                //imprimirSerial("Comando vacio");
                 return "";
             }
         }
@@ -78,7 +115,6 @@ void ManejoComunicacion::escribirVecinal(String envioVecinal) {
 
 void ManejoComunicacion::initI2C() {
     if (configLora.I2C) {
-        //I2CGral.begin(I2C_SDA, I2C_SCL);
         Wire.begin(I2C_SDA, I2C_SCL);
         imprimirSerial("I2C inicializado correctamente.", 'g');
     } else {
@@ -86,7 +122,6 @@ void ManejoComunicacion::initI2C() {
     }
 }
 
-// Cambiado de void a int
 int ManejoComunicacion::scannerI2C() {
     byte error, address;
     int nDevices = 0;
@@ -97,7 +132,7 @@ int ManejoComunicacion::scannerI2C() {
         error = Wire.endTransmission();
 
         if (error == 0) {
-            mensaje = "I2C encontrado en la direccion 0x";
+            String mensaje = "I2C encontrado en la direccion 0x";
             if (address < 16)
                 mensaje += "0";
             mensaje += String(address, HEX);
@@ -105,7 +140,7 @@ int ManejoComunicacion::scannerI2C() {
             imprimirSerial(mensaje, 'c');
             nDevices++;
         } else if (error == 4) {
-            mensaje = "Error desconocido en la direccion 0x";
+            String mensaje = "Error desconocido en la direccion 0x";
             if (address < 16)
                 mensaje += "0";
             mensaje += String(address, HEX);
@@ -148,7 +183,6 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
     String destino = comandoRecibido.substring(primerSep + 1, segundoSep);
     String comandoProcesar = comandoRecibido.substring(segundoSep + 1, tercerSep);
     String prefix1 = "";
-    String prefix2 = "";
     String accion = "";
 
     respuesta = ""; // Por defecto, vacío
@@ -172,39 +206,38 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 respuesta = "ID del nodo: " + String(configLora.IDLora);
                 imprimirSerial("El ID del nodo es -> " + String(configLora.IDLora), 'y');
             } else if (accion == "C") {
-    prefix1 = comandoProcesar.substring(4, 7);
-    imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
-    strncpy(configLora.IDLora, prefix1.c_str(), sizeof(configLora.IDLora) - 1);
-    configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0'; // Asegura el terminador nulo
-    ManejoEEPROM::guardarTarjetaConfigEEPROM();
-    respuesta = "ID cambiado a: " + prefix1;
-}
-
+                prefix1 = comandoProcesar.substring(4, 7);
+                imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
+                strncpy(configLora.IDLora, prefix1.c_str(), sizeof(configLora.IDLora) - 1);
+                configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0'; // Asegura el terminador nulo
+                ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                respuesta = "ID cambiado a: " + prefix1;
+            }
         } else if (comandoProcesar.startsWith("CH")) {
-    accion = comandoProcesar.substring(2, 3); // <-- CORREGIDO
-    if (accion == "L") {
-        respuesta = "Canal actual: " + String(configLora.Canal);
-        imprimirSerial("El canal del nodo es -> " + String(configLora.Canal), 'y');
-    } else if (accion == "C") {
-        int idxMayor = comandoProcesar.indexOf('>');
-        if (idxMayor != -1 && idxMayor + 1 < comandoProcesar.length()) {
-            prefix1 = comandoProcesar.substring(idxMayor + 1); // Toma todo lo que sigue al '>'
-            imprimirSerial("Cambiando el canal del nodo a -> " + prefix1, 'c');
-            configLora.Canal = prefix1.toInt();
-            ManejoEEPROM::guardarTarjetaConfigEEPROM();
-            lora.begin(canales[configLora.Canal]);
-            respuesta = "Canal cambiado a: " + prefix1;
-            esp_restart();
-        } else {
-            imprimirSerial("Formato de comando de canal inválido", 'r');
-            respuesta = "Formato de comando de canal inválido";
-        }
-    }
-}   else if (comandoProcesar.startsWith("SCR")) {
+            accion = comandoProcesar.substring(2, 3);
+            if (accion == "L") {
+                respuesta = "Canal actual: " + String(configLora.Canal);
+                imprimirSerial("El canal del nodo es -> " + String(configLora.Canal), 'y');
+            } else if (accion == "C") {
+                int idxMayor = comandoProcesar.indexOf('>');
+                if (idxMayor != -1 && idxMayor + 1 < comandoProcesar.length()) {
+                    prefix1 = comandoProcesar.substring(idxMayor + 1); // Toma todo lo que sigue al '>'
+                    imprimirSerial("Cambiando el canal del nodo a -> " + prefix1, 'c');
+                    configLora.Canal = prefix1.toInt();
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    lora.begin(canales[configLora.Canal]);
+                    respuesta = "Canal cambiado a: " + prefix1;
+                    esp_restart();
+                } else {
+                    imprimirSerial("Formato de comando de canal inválido", 'r');
+                    respuesta = "Formato de comando de canal inválido";
+                }
+            }
+        } else if (comandoProcesar.startsWith("SCR")) {
             accion = comandoProcesar.substring(4, 5);
             if (accion == "L") {
                 respuesta = "Pantalla " + String(configLora.Pantalla ? "activada" : "desactivada");
-                mensaje = "La pantalla de la LoRa se encuentra ";
+                String mensaje = "La pantalla de la LoRa se encuentra ";
                 mensaje += configLora.Pantalla ? "Activada" : "Desactivada";
                 imprimirSerial(mensaje);
             } else if (accion == "0") {
@@ -216,12 +249,11 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 habilitarPantalla();
                 respuesta = "Pantalla habilitada";
             }
-
         } else if (comandoProcesar.startsWith("I2C")) {
             accion = comandoProcesar.substring(4, 5);
             if (accion == "L") {
                 respuesta = "I2C " + String(configLora.I2C ? "activada" : "desactivada");
-                mensaje = "La comunicacion I2C se encuentra ";
+                String mensaje = "La comunicacion I2C se encuentra ";
                 mensaje += configLora.I2C ? "Activada" : "Desactivada";
                 imprimirSerial(mensaje);
             } else if (accion == "0") {
@@ -236,7 +268,6 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 ManejoComunicacion::initI2C();
                 respuesta = "I2C activada";
             }
-
         } else if (comandoProcesar.startsWith("SCANI2C")) {
             if (configLora.I2C) {
                 imprimirSerial("Escaneando el puerto I2C en busca de dispositivos...", 'y');
@@ -247,12 +278,11 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 imprimirSerial("La comunicacion I2C esta desactivada, no se puede escanear", 'r');
                 respuesta = "I2C desactivada, no se puede escanear";
             }
-
         } else if (comandoProcesar.startsWith("UART")) {
             accion = comandoProcesar.substring(5, 6);
             if (accion == "L") {
                 respuesta = "UART " + String(configLora.UART ? "activada" : "desactivada");
-                mensaje = "La comunicacion UART se encuentra ";
+                String mensaje = "La comunicacion UART se encuentra ";
                 mensaje += configLora.UART ? "Activada" : "Desactivada";
                 imprimirSerial(mensaje);
             } else if (accion == "0") {
@@ -267,12 +297,11 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 ManejoComunicacion::initUART();
                 respuesta = "UART activada";
             }
-
         } else if (comandoProcesar.startsWith("WIFI")) {
             accion = comandoProcesar.substring(5, 6);
             if (accion == "L") {
                 respuesta = "WiFi " + String(configLora.WiFi ? "activada" : "desactivada");
-                mensaje = "La conexion WiFi se encuentra ";
+                String mensaje = "La conexion WiFi se encuentra ";
                 mensaje += configLora.WiFi ? "Activada" : "Desactivada";
                 imprimirSerial(mensaje);
             } else if (accion == "0") {
@@ -287,13 +316,11 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 // Colocar la funcion de conexion a redes existentes
                 respuesta = "WiFi activada";
             }
-
         } else if (comandoProcesar.startsWith("RESET")) {
             imprimirSerial("Reiniciando la tarjeta LoRa...");
             respuesta = "Reiniciando la tarjeta LoRa...";
             delay(1000);
             ManejoEEPROM::borrarTarjetaConfigEEPROM();
-
         } else if (comandoProcesar.startsWith("MPROG")) {
             imprimirSerial("Entrando a modo programacion a traves de comando...");
             if (!modoProgramacion) {
@@ -301,7 +328,6 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
             }
             respuesta = "Entrando a modo programación";
         }
-
     } else if (IDLora == String(configLora.IDLora) && destino == "V") {
         ManejoComunicacion::escribirVecinal(comandoRecibido);
         respuesta = "Comando enviado a vecinal";

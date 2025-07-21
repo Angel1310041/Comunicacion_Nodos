@@ -4,6 +4,8 @@
 
   class ManejoComunicacion {
     public:
+      static void initRFReceiver();
+      static void leerRFReceiver();
       static void inicializar();
       static String leerSerial();
       static String leerVecinal();

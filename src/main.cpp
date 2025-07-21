@@ -9,13 +9,14 @@
 #include "hardware.h"
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
-String Version = "2.2.1.1";
+String Version = "3.1.1.1";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 
 TaskHandle_t tareaComandosSerial = NULL;
 TaskHandle_t tareaComandosVecinal = NULL;
 TaskHandle_t tareaComandosLoRa = NULL;
+TaskHandle_t tareaRFReceiver = NULL;
 
 extern String ultimoComandoRecibido; 
 #define MSG_ID_BUFFER_SIZE 16
@@ -204,6 +205,15 @@ void recibirComandosVecinal(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
+void tareaLecturaRF(void *pvParameters) {
+    imprimirSerial("Tarea de lectura RF iniciada...", 'c');
+    while (true) {
+        ManejoComunicacion::leerRFReceiver();
+        vTaskDelay(50 / portTICK_PERIOD_MS); // Ajusta el tiempo según necesidad
+    }
+    vTaskDelete(NULL);
+}
+
 void setup() {
     configLora.DEBUG = true; 
     Serial.begin(9600);
@@ -279,9 +289,49 @@ void setup() {
       );
       imprimirSerial("Tarea de recepcion de comandos LoRa iniciada", 'c');
     }
+
+    // --- INICIO DE TAREA UART VECINAL SI ES NECESARIO ---
+    if (!modoProgramacion && tareaComandosVecinal == NULL && configLora.UART) {
+      imprimirSerial("Iniciando tarea de recepcion de comandos Vecinal...", 'c');
+      xTaskCreatePinnedToCore(
+        recibirComandosVecinal,
+        "Comandos Vecinales",
+        5120,
+        NULL,
+        1,
+        &tareaComandosVecinal,
+        0
+      );
+      imprimirSerial("Tarea de recepcion de comandos Vecinal iniciada", 'c');
+    }
+
+    // --- INICIO DE TAREA LECTURA RF ---
+    if (tareaRFReceiver == NULL) {
+      imprimirSerial("Iniciando tarea de lectura RF...", 'c');
+      xTaskCreatePinnedToCore(
+        tareaLecturaRF,
+        "Lectura RF",
+        4096,
+        NULL,
+        1,
+        &tareaRFReceiver,
+        1 // Puedes cambiar de core si lo deseas
+      );
+      imprimirSerial("Tarea de lectura RF iniciada", 'c');
+    }
 }
 
+
 void loop() {
+    // Todas las tareas (Serial, LoRa, Vecinal, RF) corren en FreeRTOS.
+    // El loop queda vacío o con un pequeño delay para mantener el watchdog.
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+}
+/*void loop() {
+  // LECTURA Y DECODIFICACIÓN RF
+  ManejoComunicacion::leerRFReceiver();
+
+  // Si la tarea de comandos Serial no está corriendo y está en modo debug, la inicia
   if (!modoProgramacion && tareaComandosSerial == NULL && configLora.DEBUG) {
     imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
     xTaskCreatePinnedToCore(
@@ -296,6 +346,7 @@ void loop() {
     imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
   }
 
+  // Si la tarea de comandos Vecinal (UART) no está corriendo y UART está habilitado, la inicia
   if (!modoProgramacion && tareaComandosVecinal == NULL && configLora.UART) {
     imprimirSerial("Iniciando tarea de recepcion de comandos Vecinal...", 'c');
     xTaskCreatePinnedToCore(
@@ -310,6 +361,7 @@ void loop() {
     imprimirSerial("Tarea de recepcion de comandos Vecinal iniciada", 'c');
   }
 
+  // Si la tarea de comandos LoRa no está corriendo, la inicia
   if (!modoProgramacion && tareaComandosLoRa == NULL) {
     imprimirSerial("Iniciando tarea de recepcion de comandos LoRa...", 'c');
     xTaskCreatePinnedToCore(
@@ -325,4 +377,4 @@ void loop() {
   }
 
   delay(100);
-}
+}*/
