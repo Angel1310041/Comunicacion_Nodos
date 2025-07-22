@@ -17,55 +17,79 @@ cursor: pointer;
 }
 
 .modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.4);
+display: none;
+position: fixed;
+z-index: 1000;
+left: 0;
+top: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(0,0,0,0.4);
 }
 
 .modal.active {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+display: flex;
+justify-content: center;
+align-items: center;
 }
 
 .modal-content {
-    background-color: #fefefe;
-    padding: 20px;
-    border-radius: 5px;
-    width: 80%;
-    max-width: 500px;
+background-color: #fefefe;
+padding: 20px;
+border-radius: 5px;
+width: 80%;
+max-width: 500px;
 }
 
 .condicion-item {
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    padding: 10px;
-    margin-bottom: 10px;
+border: 1px solid #ddd;
+border-radius: 5px;
+padding: 10px;
+margin-bottom: 10px;
 }
 
 .condicion-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 10px;
 }
 
 .delete-condicion {
-    background: none;
-    border: none;
-    color: #dc3545;
-    cursor: pointer;
+background: none;
+border: none;
+color: #dc3545;
+cursor: pointer;
 }
 
 .no-condiciones {
-    text-align: center;
-    color: #777;
-    font-style: italic;
+text-align: center;
+color: #777;
+font-style: italic;
+}
+
+/* Estilo tabla condiciones GPIO */
+.condiciones-container {
+margin-top: 2rem;
+text-align: center;
+}
+
+.tabla-condiciones {
+margin: 0 auto;
+border-collapse: collapse;
+}
+
+.tabla-condiciones th,
+.tabla-condiciones td {
+border: 1px solid #ccc;
+width: 50px;
+height: 50px;
+text-align: center;
+vertical-align: middle;
+}
+
+.tabla-condiciones input[type="checkbox"] {
+transform: scale(1.5);
 }
 </style>
 </head>
@@ -145,7 +169,37 @@ cursor: pointer;
 </div>
 </section>
 
-<section id="funciones-content" class="doce funciones-container"></section>
+<section id="funciones-content" class="doce funciones-container">
+<div class="condiciones-container">
+<h2>Condiciones GPIO</h2>
+<table class="tabla-condiciones">
+<thead>
+<tr>
+<th></th>
+<th>F =</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td><input type="checkbox"></td>
+</tr>
+<tr>
+<td>B</td>
+<td><input type="checkbox"></td>
+</tr>
+<tr>
+<td>C</td>
+<td><input type="checkbox"></td>
+</tr>
+<tr>
+<td>D</td>
+<td><input type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 </main>
 
 <div id="wifiPasswordModal" class="modal">
@@ -163,3 +217,4 @@ cursor: pointer;
 <script src="Script.js"></script>
 </body>
 </html>
+<script></script>

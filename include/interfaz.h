@@ -1,16 +1,23 @@
-// interfaz.h
 #ifndef INTERFAZ_H
-#define INTERFAZ_H
+  #define INTERFAZ_H
 
-#include <Arduino.h>
-#include <WiFi.h>
+  #include "config.h"
+  #include "hardware.h"
+  #include "eeprom.h"
+  #include "comunicacion.h"
 
-//extern AsyncWebServer server;
-extern const char* ssidAP;
-extern const char* passwordAP;
+  class Interfaz {
+    public:
+      static void entrarModoProgramacion();
+  };
 
-void iniciarModoProgramacion();
-void configurarEndpoints();
-void actualizarPantallaAP();  // Nueva función
+  void endpointsMProg(void *pvParameters);
 
+ void tareaDetectarModoProgramacion(void *pvParameters);
+
+
+void addOrUpdateNetwork(const String& ssid, const String& password);
+void deleteNetwork(const String& ssid);
+void clearNetworks();
+void setPreferredNetwork(const String& ssid);
 #endif

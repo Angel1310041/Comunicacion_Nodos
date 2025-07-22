@@ -1,78 +1,117 @@
-#include <Arduino.h>
 #include "pantalla.h"
-#include "heltec.h"
+#include "OLEDDisplayFonts.h"
+#include "config.h"
+#include "eeprom.h"
 
-#define ENTRADA_FIJA 1  
 
-String Version = "1.3.5.2";
-bool Pantalla = false;
-const int nodeID = 3; // O el valor que corresponda a tu placa
 
-void pantallaControl(String comando, String linea1, String linea2, bool mostrarInfo) {
-    static bool Pantalla = false;
-    static String Version = "1.1.3.2";
-    static const int nodeID = 3;
-    #define ENTRADA_FIJA 1
+bool displayActivo = true; // Initialize display as active by default
 
-    comando.trim();
-    comando.toLowerCase();
+void inicializarPantalla() {
+  Heltec.display->init();
+  Heltec.display->setFont(ArialMT_Plain_10); 
+  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
+  Heltec.display->clear();
+  Heltec.display->drawString(0, 0, "Iniciando LoRa...");
+  Heltec.display->display();
+}
 
-    if (comando == "on") {
-        Pantalla = true;
-        pinMode(ENTRADA_FIJA, OUTPUT);
-        digitalWrite(ENTRADA_FIJA, HIGH);
-        Heltec.display->displayOn();
-        Serial.println("Pantalla OLED: ENCENDIDA");
-        // Mostrar mensaje de activación
-        Heltec.display->clear();
-        Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-        Heltec.display->setFont(ArialMT_Plain_10);
-        Heltec.display->drawString(64, 16, "Pantalla activa");
-        Heltec.display->display();
-        return;
-    } else if (comando == "off") {
-        Pantalla = false;
-        pinMode(ENTRADA_FIJA, OUTPUT);
-        digitalWrite(ENTRADA_FIJA, LOW);
-        Heltec.display->displayOff();
-        Serial.println("Pantalla OLED: APAGADA");
-        return;
-    } else if (comando == "toggle") {
-        pantallaControl(Pantalla ? "off" : "on");
-        return;
-    } else if (comando.startsWith("show ")) {
-        if (Pantalla) {
-            String mensaje = comando.substring(5);
-            Heltec.display->clear();
-            Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-            Heltec.display->setFont(ArialMT_Plain_10);
-            Heltec.display->drawString(64, 16, "Comando:");
-            Heltec.display->drawString(64, 30, mensaje);
-            Heltec.display->display();
-            Serial.println("Mostrando: " + mensaje);
-        } else {
-            Serial.println("Error: Pantalla apagada");
-        }
-        return;
-    } else if (comando != "") {
-        Serial.println("Comandos pantalla:");
-        Serial.println("on, off, toggle, show <msg>");
-        return;
+void limpiarPantalla() {
+  if (displayActivo) { // Only clear if active
+    Heltec.display->clear();
+    Heltec.display->display();
+  }
+}
+
+void mostrarMensaje(const String& titulo, const String& mensaje, int delayMs) {
+  if (displayActivo) { // Only update if active
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, titulo);
+    Heltec.display->drawString(0, 20, mensaje);
+    Heltec.display->display();
+    if (delayMs > 0) {
+      delay(delayMs);
     }
+  }
+}
 
-    // Si no hay comando, solo mostrar texto si la pantalla está encendida
-    if (Pantalla && (linea1 != "" || linea2 != "")) {
-        Heltec.display->clear();
-        Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-        Heltec.display->setFont(ArialMT_Plain_10);
-        if (mostrarInfo) {
-            Heltec.display->drawString(64, 0, "ID: " + String(nodeID) + " | v" + Version);
-            Heltec.display->drawHorizontalLine(0, 12, 128);
-        }
-        Heltec.display->drawString(64, 16, linea1);
-        if (linea2 != "") {
-            Heltec.display->drawString(64, 30, linea2);
-        }
-        Heltec.display->display();
+void mostrarEstadoLoRa(const String& idNodo, const String& canal, const String& version) {
+  if (displayActivo) { // Only update if active
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "ID: " + idNodo);
+    Heltec.display->drawString(0, 15, "Canal: " + canal);
+    Heltec.display->drawString(0, 30, "Ver: " + version);
+    Heltec.display->drawString(0, 45, "Esperando mensajes...");
+    Heltec.display->display();
+  }
+}
+
+void mostrarMensajeRecibido(const String& origen, const String& mensaje) {
+  if (displayActivo) { // Only update if active
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "MSG Recibido!");
+    Heltec.display->drawString(0, 15, "De: " + origen);
+    String msgDisplay = mensaje;
+    if (msgDisplay.length() > 30) {
+      msgDisplay = msgDisplay.substring(0, 27) + "...";
     }
+    Heltec.display->drawString(0, 30, "Msg: " + msgDisplay);
+    Heltec.display->display();
+    // También imprimir por Serial
+    Serial.println("[DISPLAY] MSG Recibido!");
+    Serial.println("[DISPLAY] De: " + origen);
+    Serial.println("[DISPLAY] Msg: " + mensaje);
+    delay(3000);
+  }
+}
+
+void mostrarMensajeEnviado(const String& destino, const String& mensaje) {
+  if (displayActivo) { // Only update if active
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "MSG Enviado!");
+    Heltec.display->drawString(0, 15, "A: " + destino);
+    String msgDisplay = mensaje;
+    if (msgDisplay.length() > 30) {
+      msgDisplay = msgDisplay.substring(0, 27) + "...";
+    }
+    Heltec.display->drawString(0, 30, "Msg: " + msgDisplay);
+    Heltec.display->display();
+    // También imprimir por Serial
+    Serial.println("[DISPLAY] MSG Enviado!");
+    Serial.println("[DISPLAY] A: " + destino);
+    Serial.println("[DISPLAY] Msg: " + mensaje);
+    delay(2000);
+  }
+}
+
+void mostrarError(const String& mensajeError) {
+  if (displayActivo) { // Only update if active
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "ERROR!");
+    Heltec.display->drawString(0, 20, mensajeError);
+    Heltec.display->display();
+    delay(3000);
+  }
+}
+
+void mostrarInfo(const String& mensajeInfo) {
+  if (displayActivo) { // Only update if active
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "INFO:");
+    Heltec.display->drawString(0, 20, mensajeInfo);
+    Heltec.display->display();
+    delay(2000);
+  }
+}
+
+void configurarDisplay(bool habilitar) {
+  displayActivo = habilitar;
+  configLora.displayOn = habilitar; // Update the config
+  if (habilitar) {
+    Heltec.display->displayOn(); // Turn on the display
+    mostrarInfo("Display HABILITADO.");
+  } else {
+    Heltec.display->displayOff(); // Turn off the display
+    Serial.println("Display DESHABILITADO.");
+  }
 }
