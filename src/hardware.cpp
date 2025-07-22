@@ -217,22 +217,28 @@ void Hardware::manejarComandoPorFuente(const String& fuente) {
 }
 
 void Hardware::inicializar() {
-  ManejoEEPROM::tarjetaNueva();
-  pinMode(LED_STATUS, OUTPUT);
-  pinMode(TEST_IN, INPUT);
-  Hardware::configurarPinesGPIO(configLora.PinesGPIO, configLora.FlancosGPIO);
+    ManejoEEPROM::tarjetaNueva();
+    pinMode(LED_STATUS, OUTPUT);
+    pinMode(TEST_IN, INPUT);
+    Hardware::configurarPinesGPIO(configLora.PinesGPIO, configLora.FlancosGPIO);
 
-  /*if (!modoProgramacion && tareaEvaluarCondicionales == NULL) {
-    imprimirSerial("Iniciando tarea de Evaluacion de Condicionales GPIO...", 'c');
-    xTaskCreatePinnedToCore(
-      evaluarCondicionales,
-      "Condicionales GPIO",
-      5120,
-      NULL,
-      1,
-      &tareaEvaluarCondicionales,
-      0
-    );
-    imprimirSerial("Tarea de Evaluacion de Condicionales iniciada", 'c');
-  }*/
+    // --- Asegura que los pines de RF estén siempre como salidas ---
+    pinMode(PIN_IO1, OUTPUT);
+    pinMode(PIN_IO2, OUTPUT);
+    digitalWrite(PIN_IO1, LOW); // Inicialmente apagados
+    digitalWrite(PIN_IO2, LOW);
+
+    /*if (!modoProgramacion && tareaEvaluarCondicionales == NULL) {
+        imprimirSerial("Iniciando tarea de Evaluacion de Condicionales GPIO...", 'c');
+        xTaskCreatePinnedToCore(
+            evaluarCondicionales,
+            "Condicionales GPIO",
+            5120,
+            NULL,
+            1,
+            &tareaEvaluarCondicionales,
+            0
+        );
+        imprimirSerial("Tarea de Evaluacion de Condicionales iniciada", 'c');
+    }*/
 }

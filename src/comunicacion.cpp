@@ -16,35 +16,63 @@ TwoWire I2CGral = TwoWire(1);
 
 volatile bool rfSignalReceived = false;
 unsigned long lastRFSignalTime = 0;
-
-// Instancia global de RCSwitch para RF
 static RCSwitch mySwitch = RCSwitch();
 
-// --- FUNCIONES PARA CONTROL DE PANTALLA ---
 void habilitarPantalla() {
     configLora.Pantalla = true;
-    configurarDisplay(true); // Enciende la pantalla físicamente
+    configurarDisplay(true);
     imprimirSerial("Pantalla habilitada.", 'g');
     ManejoEEPROM::guardarTarjetaConfigEEPROM();
 }
 
 void deshabilitarPantalla() {
     configLora.Pantalla = false;
-    configurarDisplay(false); // Apaga la pantalla físicamente
+    configurarDisplay(false); 
     imprimirSerial("Pantalla deshabilitada.", 'y');
     ManejoEEPROM::guardarTarjetaConfigEEPROM();
 }
 
-// --- Inicialización del receptor RF con rc-switch ---
+void parpadearLEDStatus(int veces, int periodo_ms) {
+    for (int i = 0; i < veces; ++i) {
+        digitalWrite(LED_STATUS, HIGH);
+        delay(periodo_ms / 2);
+        digitalWrite(LED_STATUS, LOW);
+        delay(periodo_ms / 2);
+    }
+}
+
+void manejarCodigoRF(unsigned long value) {
+    // Parpadea el LED_STATUS 3 veces (600 ms total, 200 ms por ciclo)
+    parpadearLEDStatus(3, 200);
+
+    if (value == 7969128) {
+        digitalWrite(PIN_IO1, HIGH);
+        digitalWrite(PIN_IO2, LOW);
+        imprimirSerial("PIN_IO1 habilitado por RF: 7969128", 'g');
+    } else if (value == 7969124) {
+        digitalWrite(PIN_IO2, HIGH);
+        digitalWrite(PIN_IO1, LOW);
+        imprimirSerial("PIN_IO2 habilitado por RF: 7969124", 'g');
+    } else if (value == 7969122) {
+        digitalWrite(PIN_IO1, HIGH);
+        digitalWrite(PIN_IO2, LOW);
+        imprimirSerial("PIN_IO1 habilitado por RF: 7969122", 'g');
+    } else if (value == 7969121) {
+        digitalWrite(PIN_IO1, LOW);
+        digitalWrite(PIN_IO2, LOW);
+        imprimirSerial("PIN_IO1 y PIN_IO2 deshabilitados por RF: 7969121", 'y');
+    }
+}
+
 void ManejoComunicacion::initRFReceiver() {
-    mySwitch.enableReceive(RECEPTOR_RF); // RECEPTOR_RF debe ser el número de pin GPIO
+    mySwitch.enableReceive(RECEPTOR_RF); 
     imprimirSerial("Receptor RF RX500 inicializado con rc-switch en pin " + String(RECEPTOR_RF), 'g');
 }
 
 void ManejoComunicacion::leerRFReceiver() {
-    static unsigned long ultimoValor = 0; // Último valor recibido
-    static unsigned long ultimoTiempo = 0; // Último tiempo de impresión (ms)
-    const unsigned long intervalo = 200;   // Intervalo mínimo entre impresiones del mismo código (ms)
+    static unsigned long ultimoValor = 0; 
+    static unsigned long ultimoTiempo = 0; 
+    const unsigned long intervalo = 200;   
 
     if (mySwitch.available()) {
         unsigned long value = mySwitch.getReceivedValue();
@@ -53,17 +81,17 @@ void ManejoComunicacion::leerRFReceiver() {
         if (value == 0) {
             Serial.println("Codigo desconocido recibido (demasiado corto o ruido)");
         } else {
-            // Imprime si es un código nuevo o si han pasado al menos 200 ms desde la última impresión del mismo código
             if (value != ultimoValor || (ahora - ultimoTiempo) >= intervalo) {
                 Serial.println("Codigo RF recibido: " + String(value));
+                manejarCodigoRF(value);
                 ultimoValor = value;
                 ultimoTiempo = ahora;
             }
-            // Si es igual y no ha pasado el tiempo, no imprime nada
         }
         mySwitch.resetAvailable();
     }
 }
+
 
 void ManejoComunicacion::inicializar() {
     Serial.begin(9600);
@@ -80,7 +108,7 @@ void ManejoComunicacion::inicializar() {
 
 void ManejoComunicacion::initUART() {
     if (configLora.UART) {
-        Serial2.begin(9600, SERIAL_8N1, UART_RX, UART_TX); // RX=46, TX=45
+        Serial2.begin(9600, SERIAL_8N1, UART_RX, UART_TX); 
         imprimirSerial("UART inicializado correctamente.", 'g');
     } else {
         imprimirSerial("UART inhabilitado", 'y');
@@ -170,7 +198,7 @@ String ManejoComunicacion::leerSerial() {
 }
 
 void ManejoComunicacion::envioMsjLoRa(String comandoLoRa) {
-    String IDLoraRecibido = comandoLoRa.substring(0, 3); // ID del nodo LoRa
+    String IDLoraRecibido = comandoLoRa.substring(0, 3); 
     imprimirSerial("Enviando comando " + comandoLoRa + " a lora con el ID " + IDLoraRecibido);
 }
 
@@ -185,19 +213,56 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
     String prefix1 = "";
     String accion = "";
 
-    respuesta = ""; // Por defecto, vacío
-
+    respuesta = ""; 
     if (comandoRecibido == "") {
-        respuesta = "Comando vacío";
+        respuesta = "Comando vacio";
         return;
     } else if (comandoRecibido == ultimoComandoRecibido) {
         imprimirSerial("Comando repetido, no se ejecutara una nueva accion\n", 'c');
         respuesta = "Comando repetido";
         return;
     }
-    ultimoComandoRecibido = comandoRecibido; // Actualizar el ultimo comando
+    ultimoComandoRecibido = comandoRecibido; 
     imprimirSerial("\nComando recibido en procesado de comando: " + comandoRecibido);
     imprimirSerial("\nComando a Procesar -> " + comandoProcesar);
+
+    if (comandoProcesar.startsWith("SETPIN:") || comandoProcesar.startsWith("CLRPIN:") || comandoProcesar.startsWith("GETPIN:")) {
+        String pinName = comandoProcesar.substring(comandoProcesar.indexOf(':') + 1);
+        int pin = -1;
+        if (pinName == "IO1") pin = PIN_IO1;
+        else if (pinName == "IO2") pin = PIN_IO2;
+        else if (pinName == "IO3") pin = PIN_IO3;
+        else if (pinName == "IO4") pin = PIN_IO4;
+        else if (pinName == "IO5") pin = PIN_IO5;
+        else if (pinName == "IO6") pin = PIN_IO6;
+
+        if (pin == -1) {
+            respuesta = "Pin no reconocido";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
+
+        if (comandoProcesar.startsWith("SETPIN:")) {
+            pinMode(pin, OUTPUT);
+            digitalWrite(pin, HIGH);
+            respuesta = "Pin " + pinName + " habilitado (HIGH)";
+            imprimirSerial(respuesta, 'g');
+            return;
+        } else if (comandoProcesar.startsWith("CLRPIN:")) {
+            pinMode(pin, OUTPUT);
+            digitalWrite(pin, LOW);
+            respuesta = "Pin " + pinName + " deshabilitado (LOW)";
+            imprimirSerial(respuesta, 'y');
+            return;
+        } else if (comandoProcesar.startsWith("GETPIN:")) {
+            pinMode(pin, INPUT); // Si el pin es salida, puedes omitir esto
+            int estado = digitalRead(pin);
+            respuesta = "Pin " + pinName + " estado: " + String(estado ? "HABILITADO (HIGH)" : "DESHABILITADO (LOW)");
+            imprimirSerial(respuesta, 'c');
+            return;
+        }
+    }
+    // --- FIN NUEVA SECCIÓN ---
 
     if (IDLora == String(configLora.IDLora) && destino == "L") {
         if (comandoProcesar.startsWith("ID")) {
@@ -209,7 +274,7 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 prefix1 = comandoProcesar.substring(4, 7);
                 imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
                 strncpy(configLora.IDLora, prefix1.c_str(), sizeof(configLora.IDLora) - 1);
-                configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0'; // Asegura el terminador nulo
+                configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0'; 
                 ManejoEEPROM::guardarTarjetaConfigEEPROM();
                 respuesta = "ID cambiado a: " + prefix1;
             }
@@ -221,7 +286,7 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
             } else if (accion == "C") {
                 int idxMayor = comandoProcesar.indexOf('>');
                 if (idxMayor != -1 && idxMayor + 1 < comandoProcesar.length()) {
-                    prefix1 = comandoProcesar.substring(idxMayor + 1); // Toma todo lo que sigue al '>'
+                    prefix1 = comandoProcesar.substring(idxMayor + 1); 
                     imprimirSerial("Cambiando el canal del nodo a -> " + prefix1, 'c');
                     configLora.Canal = prefix1.toInt();
                     ManejoEEPROM::guardarTarjetaConfigEEPROM();
@@ -313,7 +378,6 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
                 imprimirSerial("Activando la comunicacion WiFi");
                 configLora.WiFi = true;
                 ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                // Colocar la funcion de conexion a redes existentes
                 respuesta = "WiFi activada";
             }
         } else if (comandoProcesar.startsWith("RESET")) {

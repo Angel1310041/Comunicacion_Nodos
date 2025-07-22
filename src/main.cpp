@@ -9,7 +9,7 @@
 #include "hardware.h"
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
-String Version = "3.1.1.1";
+String Version = "3.1.1.2";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 
@@ -31,18 +31,18 @@ String mensaje = "";
 void imprimirSerial(String mensaje, char color) {
   String colorCode;
   switch (color) {
-    case 'r': colorCode = "\033[31m"; break; // Rojo
-    case 'g': colorCode = "\033[32m"; break; // Verde
-    case 'b': colorCode = "\033[34m"; break; // Azul
-    case 'y': colorCode = "\033[33m"; break; // Amarillo
-    case 'c': colorCode = "\033[36m"; break; // Cian
-    case 'm': colorCode = "\033[35m"; break; // Magenta
-    case 'w': colorCode = "\033[37m"; break; // Blanco
-    default: colorCode = "\033[0m"; // Sin color
+    case 'r': colorCode = "\033[31m"; break; 
+    case 'g': colorCode = "\033[32m"; break; 
+    case 'b': colorCode = "\033[34m"; break; 
+    case 'y': colorCode = "\033[33m"; break; 
+    case 'c': colorCode = "\033[36m"; break; 
+    case 'm': colorCode = "\033[35m"; break; 
+    case 'w': colorCode = "\033[37m"; break; 
+    default: colorCode = "\033[0m"; 
   }
   Serial.print(colorCode);
   Serial.println(mensaje);
-  Serial.print("\033[0m"); // Resetear color
+  Serial.print("\033[0m");
 }
 
 void agregarNodoActivo(const String& id) {
@@ -87,15 +87,17 @@ void enviarComandoEstructurado(const String& destino, char red, const String& co
         imprimirSerial("Enviando comando estructurado a HOP:" + siguienteHop + " por canal " + String(configLora.Canal), 'c');
         mostrarMensaje("Enviando...", "A HOP: " + siguienteHop, 0);
         lora.standby();
-        int resultado = lora.transmit(paquete);
-        if (resultado == RADIOLIB_ERR_NONE) {
-            imprimirSerial("Comando enviado correctamente.", 'g');
-            Hardware::manejarComandoPorFuente("lora");
-            guardarMsgID(msgID); mostrarMensajeEnviado(destino, msg);
-        } else {
-            imprimirSerial("Error al enviar: " + String(resultado), 'r');
-            mostrarError("Error al enviar: " + String(resultado));
-        }
+        mostrarMensajeEnviado(destino, msg); // <-- MUESTRA ANTES DE ENVIAR
+int resultado = lora.transmit(paquete);
+if (resultado == RADIOLIB_ERR_NONE) {
+    imprimirSerial("Comando enviado correctamente.", 'g');
+    Hardware::manejarComandoPorFuente("lora");
+    guardarMsgID(msgID);
+    // NO LLAMES mostrarMensajeEnviado aquí otra vez
+} else {
+    imprimirSerial("Error al enviar: " + String(resultado), 'r');
+    mostrarError("Error al enviar: " + String(resultado));
+}
         lora.startReceive();
     } else {
         imprimirSerial("Destino inválido o comando vacío.", 'y');
@@ -165,6 +167,15 @@ void recibirComandosLoRa(void *pvParameters) {
                     int idx2 = comandoRecibido.indexOf('@', idx1 + 1);
                     int idx3 = comandoRecibido.indexOf('@', idx2 + 1);
                     if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
+                        // Extraer el origen del mensaje
+                        String origen = "";
+                        int idxOrig = msg.indexOf("ORIG:");
+                        int idxPipeOrig = msg.indexOf("|", idxOrig);
+                        if (idxOrig != -1 && idxPipeOrig != -1) {
+                            origen = msg.substring(idxOrig + 5, idxPipeOrig);
+                        }
+                        mostrarMensajeRecibido(origen, comandoRecibido); // <--- Aquí
+
                         ManejoComunicacion::procesarComando(comandoRecibido, respuesta);
                         ultimoComandoRecibido = comandoRecibido;
                     } else {
@@ -209,7 +220,7 @@ void tareaLecturaRF(void *pvParameters) {
     imprimirSerial("Tarea de lectura RF iniciada...", 'c');
     while (true) {
         ManejoComunicacion::leerRFReceiver();
-        vTaskDelay(50 / portTICK_PERIOD_MS); // Ajusta el tiempo según necesidad
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -290,7 +301,6 @@ void setup() {
       imprimirSerial("Tarea de recepcion de comandos LoRa iniciada", 'c');
     }
 
-    // --- INICIO DE TAREA UART VECINAL SI ES NECESARIO ---
     if (!modoProgramacion && tareaComandosVecinal == NULL && configLora.UART) {
       imprimirSerial("Iniciando tarea de recepcion de comandos Vecinal...", 'c');
       xTaskCreatePinnedToCore(
@@ -305,7 +315,6 @@ void setup() {
       imprimirSerial("Tarea de recepcion de comandos Vecinal iniciada", 'c');
     }
 
-    // --- INICIO DE TAREA LECTURA RF ---
     if (tareaRFReceiver == NULL) {
       imprimirSerial("Iniciando tarea de lectura RF...", 'c');
       xTaskCreatePinnedToCore(
@@ -315,7 +324,7 @@ void setup() {
         NULL,
         1,
         &tareaRFReceiver,
-        1 // Puedes cambiar de core si lo deseas
+        1
       );
       imprimirSerial("Tarea de lectura RF iniciada", 'c');
     }
@@ -323,58 +332,5 @@ void setup() {
 
 
 void loop() {
-    // Todas las tareas (Serial, LoRa, Vecinal, RF) corren en FreeRTOS.
-    // El loop queda vacío o con un pequeño delay para mantener el watchdog.
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
-/*void loop() {
-  // LECTURA Y DECODIFICACIÓN RF
-  ManejoComunicacion::leerRFReceiver();
-
-  // Si la tarea de comandos Serial no está corriendo y está en modo debug, la inicia
-  if (!modoProgramacion && tareaComandosSerial == NULL && configLora.DEBUG) {
-    imprimirSerial("Iniciando tarea de recepcion de comandos Seriales...", 'c');
-    xTaskCreatePinnedToCore(
-      recibirComandoSerial,
-      "Comandos Seriales",
-      5120,
-      NULL,
-      1,
-      &tareaComandosSerial,
-      0
-    );
-    imprimirSerial("Tarea de recepcion de comandos Seriales iniciada", 'c');
-  }
-
-  // Si la tarea de comandos Vecinal (UART) no está corriendo y UART está habilitado, la inicia
-  if (!modoProgramacion && tareaComandosVecinal == NULL && configLora.UART) {
-    imprimirSerial("Iniciando tarea de recepcion de comandos Vecinal...", 'c');
-    xTaskCreatePinnedToCore(
-      recibirComandosVecinal,
-      "Comandos Vecinales",
-      5120,
-      NULL,
-      1,
-      &tareaComandosVecinal,
-      0
-    );
-    imprimirSerial("Tarea de recepcion de comandos Vecinal iniciada", 'c');
-  }
-
-  // Si la tarea de comandos LoRa no está corriendo, la inicia
-  if (!modoProgramacion && tareaComandosLoRa == NULL) {
-    imprimirSerial("Iniciando tarea de recepcion de comandos LoRa...", 'c');
-    xTaskCreatePinnedToCore(
-      recibirComandosLoRa,
-      "Comandos LoRa",
-      5120,
-      NULL,
-      1,
-      &tareaComandosLoRa,
-      0
-    );
-    imprimirSerial("Tarea de recepcion de comandos LoRa iniciada", 'c');
-  }
-
-  delay(100);
-}*/
