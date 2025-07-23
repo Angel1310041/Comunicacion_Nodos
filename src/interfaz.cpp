@@ -1,256 +1,412 @@
-#include "interfaz.h"
-#include "hardware.h"
-#include "comunicacion.h"
-#include "config.h"
-#include "eeprom.h"
-#include <ESPAsyncWebServer.h>
-#include <SPIFFS.h>
-#include <WiFi.h>
+  #include "interfaz.h"
+  #include "hardware.h"
+  #include "comunicacion.h"
+  #include "config.h"
+  #include "pantalla.h"
+  #include "eeprom.h"
+  #include <WiFi.h>
+  #include <WebServer.h>
+  #include <FS.h>
+  #include <SPIFFS.h>
+  #include <WiFiType.h>
 
-// Esto se Agrego entrar a la red 
-const char* ssidAP = "InterfazIoT";
-const char* passwordAP = "12345678";
-IPAddress local_IP(192, 168, 4, 1);
-IPAddress gateway(192, 168, 4, 1);
-IPAddress subnet(255, 255, 255, 0);
+  WebServer server(80);
 
-AsyncWebServer server(80);
+  // Función para intercambio de datos API
+  void apiIntercambiarDatos();
 
-const char* htmlPath = "/interfaz.html.gz";
-
-// --- Declaraciones para gestión de redes WiFi ---
-#define MAX_NETWORKS 3 // GUarda la cantidad de redes 
-#define SSID_MAXLEN 32 // Longitud maxima paranombre de las redes 
-#define PASS_MAXLEN 64 //Logitud maxima para la   contraseña de las redes
-
-struct SavedNetwork {
-char ssid[SSID_MAXLEN];
-char password[PASS_MAXLEN];
-};
-
-struct WifiConfig {
-SavedNetwork networks[MAX_NETWORKS];
-uint8_t count;
-int8_t preferred;
-};
-
-WifiConfig wifiConfig;
-
-
-// --- Función para registrar los endpoints de la API de intercambio de información y WiFi ---
-void IntercambioInfoAPI(const String& ip) {
-// Endpoint para mostrar info de red
-server.on("/info", HTTP_GET, [ip](AsyncWebServerRequest *request) {
-String jsonResponse = "{\"ssid\":\"" + String(ssidAP) + "\",\"ip\":\"" + ip + "\",\"password\":\"" + String(passwordAP) + "\"}";
-request->send(200, "application/json", jsonResponse);
-});
-
-// Escanear redes WiFi disponibles
-server.on("/redesDisponibles", HTTP_GET, [](AsyncWebServerRequest *request) {
-DynamicJsonDocument doc(2048);
-JsonArray arr = doc.createNestedArray("networks");
-int n = WiFi.scanNetworks();
-for (int i = 0; i < n; ++i) {
-  JsonObject net = arr.createNestedObject();
-  net["ssid"] = WiFi.SSID(i);
-  net["security"] = WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "Abierta" : "WPA/WPA2";
-  int rssi = WiFi.RSSI(i);
-  int intensity = constrain(map(rssi, -90, -30, 1, 4), 1, 4);
-  net["intensity"] = intensity;
-}
-String json;
-serializeJson(doc, json);
-request->send(200, "application/json", json);
-});
-
-// Listar redes guardadas
-server.on("/redesGuardadas", HTTP_GET, [](AsyncWebServerRequest *request) {
-DynamicJsonDocument doc(2048);
-JsonArray arr = doc.createNestedArray("networks");
-for (uint8_t i = 0; i < wifiConfig.count; ++i) {
-  JsonObject obj = arr.createNestedObject();
-  obj["ssid"] = wifiConfig.networks[i].ssid;
-  obj["password"] = wifiConfig.networks[i].password;
-  obj["preferred"] = (wifiConfig.preferred == i);
-}
-String json;
-serializeJson(doc, json);
-request->send(200, "application/json", json);
-});
-
-// Guardar una red (POST)
-server.on("/guardarRed", HTTP_POST, [](AsyncWebServerRequest *request) {
-if (!request->hasParam("ssid", true) || !request->hasParam("password", true)) {
-  request->send(400, "application/json", "{\"error\":\"Faltan parámetros\"}");
-  return;
-}
-String ssid = request->getParam("ssid", true)->value();
-String password = request->getParam("password", true)->value();
-addOrUpdateNetwork(ssid, password);
-request->send(200, "application/json", "{\"mensaje\": \"Red guardada\"}");
-});
-
-// Conectar a una red (POST)
-server.on("/conectarRed", HTTP_POST, [](AsyncWebServerRequest *request) {
-if (!request->hasParam("ssid", true)) {
-  request->send(400, "application/json", "{\"error\":\"Falta el SSID\"}");
-  return;
-}
-String ssid = request->getParam("ssid", true)->value();
-String password = request->hasParam("password", true) ? request->getParam("password", true)->value() : "";
-// Aquí podrías intentar conectar realmente, pero solo respondemos éxito
-request->send(200, "application/json", "{\"connected\": true}");
-});
-
-// Actualizar red guardada (POST)
-server.on("/actualizarRed", HTTP_POST, [](AsyncWebServerRequest *request) {
-if (!request->hasParam("ssid", true) || !request->hasParam("password", true)) {
-  request->send(400, "application/json", "{\"error\":\"Faltan parámetros\"}");
-  return;
-}
-String ssid = request->getParam("ssid", true)->value();
-String password = request->getParam("password", true)->value();
-addOrUpdateNetwork(ssid, password);
-request->send(200, "application/json", "{\"mensaje\": \"Red actualizada\"}");
-});
-
-// Borrar una red guardada (POST)
-server.on("/borrarRed", HTTP_POST, [](AsyncWebServerRequest *request) {
-if (!request->hasParam("ssid", true)) {
-  request->send(400, "application/json", "{\"error\":\"Falta el SSID\"}");
-  return;
-}
-String ssid = request->getParam("ssid", true)->value();
-deleteNetwork(ssid);
-request->send(200, "application/json", "{\"mensaje\": \"Red guardada eliminada\"}");
-});
-
-// Borrar todas las redes guardadas
-server.on("/borrarRedes", HTTP_GET, [](AsyncWebServerRequest *request) {
-clearNetworks();
-request->send(200, "application/json", "{\"mensaje\": \"Redes guardadas eliminadas\"}");
-});
-
-// Marcar red preferida (POST)
-server.on("/preferirRed", HTTP_POST, [](AsyncWebServerRequest *request) {
-if (!request->hasParam("ssid", true)) {
-  request->send(400, "application/json", "{\"error\":\"Falta el SSID\"}");
-  return;
-}
-String ssid = request->getParam("ssid", true)->value();
-setPreferredNetwork(ssid);
-request->send(200, "application/json", "{\"mensaje\": \"Red preferida actualizada\"}");
-});
-}
-
-
-// Función para cargar la interfaz  en modo programación
-void CargarInterfaz() {
-if (!SPIFFS.begin(true)) {
-Serial.println("Error al montar SPIFFS");
-return;
-}
-
-WiFi.mode(WIFI_AP);
-WiFi.softAPConfig(local_IP, gateway, subnet);
-WiFi.softAP(ssidAP, passwordAP);
-
-String ip = WiFi.softAPIP().toString();
-
-Serial.println("Punto de acceso iniciado:");
-Serial.print("SSID: ");
-Serial.println(ssidAP);
-Serial.print("Contraseña: ");
-Serial.println(passwordAP);
-Serial.print("IP: ");
-Serial.println(ip);
-
-// Endpoint para servir el HTML comprimido
-server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-if (!SPIFFS.exists(htmlPath)) {
-request->send(404, "text/plain", "Archivo interfaz no encontrado");
-return;
-}
-AsyncWebServerResponse *response = request->beginResponse(SPIFFS, htmlPath, "text/html");
-response->addHeader("Content-Encoding", "gzip");
-request->send(response);
-});
-
-// Endpoint para mostrar info de red
-server.on("/info", HTTP_GET, [ip](AsyncWebServerRequest *request) {
-String jsonResponse = "{\"ssid\":\"" + String(ssidAP) + "\",\"ip\":\"" + ip + "\",\"password\":\"" + String(passwordAP) + "\"}";
-request->send(200, "application/json", jsonResponse);
-});
-
-server.onNotFound([](AsyncWebServerRequest *request) {
-request->send(404, "text/plain", "Página no encontrada");
-});
-
-server.begin();
-Serial.println("Servidor web iniciado en modo programación");
-}
-
-
-
-void tareaDetectarModoProgramacion(void *pvParameters) {
-    pinMode(PROG, INPUT_PULLUP);
-    pinMode(LED_STATUS, OUTPUT);
-    digitalWrite(LED_STATUS, LOW);
-
-    while (true) {
-        // Espera a que el botón sea presionado (LOW)
-        if (digitalRead(PROG) == LOW) {
-            unsigned long tiempoInicio = millis();
-            // Espera mientras el botón siga presionado
-            while (digitalRead(PROG) == LOW) {
-                // Si pasan 3 segundos (3000 ms)
-                if (millis() - tiempoInicio >= 3000) {
-                    // Entra en modo programación solo si no está ya activo
-                    if (!modoProgramacion) {
-                        modoProgramacion = true;
-                        digitalWrite(LED_STATUS, HIGH);
-                        Serial.println("Entrando en modo programación por botón físico...");
-                        CargarInterfaz();
-                        Serial.print("SSID: ");
-                        Serial.println("DispositivoIoT");
-                        Serial.print("Contraseña: ");
-                        Serial.println("iotpassword123");
-                        Serial.print("IP: ");
-                        Serial.println(WiFi.softAPIP());
-                        // El LED queda encendido mientras esté en modo programación
-                    }
-                    // Una vez en modo programación, queda en bucle infinito hasta reinicio
-                    while (true) {
-                        digitalWrite(LED_STATUS, HIGH); // Mantiene el LED encendido
-                        vTaskDelay(1000 / portTICK_PERIOD_MS);
-                    }
-                }
-                vTaskDelay(10 / portTICK_PERIOD_MS);
-            }
-        }
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-    }
-}
-
-
-
-void Interfaz::entrarModoProgramacion() {
+  void Interfaz::entrarModoProgramacion() {
   modoProgramacion = true;
   esp_task_wdt_reset();
   digitalWrite(LED_STATUS, HIGH);
   vTaskDelay(1000 / portTICK_PERIOD_MS);
   xTaskCreatePinnedToCore(
-    endpointsMProg,
-    "Endpoints",
-    8192,
-    NULL,
-    2,
-    NULL,
-    0
+  endpointsMProg,
+  "Endpoints",
+  8192,
+  NULL,
+  2,
+  NULL,
+  0
   );
   imprimirSerial("---# Modo Programacion Activado #---", 'g');
+  }
+
+  void endpointsMProg(void *pvParameters) {
+  imprimirSerial("Modo Programacion Falso", 'b');
+  servidorModoProgramacion();
+
+  }
+
+  void modoprogporbotonfisico() {
+  static unsigned long tiempoInicio = 0;
+  static bool botonAnterior = false;
+
+  bool botonPresionado = digitalRead(BOTON_MODO_PROG) == LOW; // Botón activo en LOW
+
+  if (!modoProgramacion) {
+  if (botonPresionado) {
+  if (!botonAnterior) {
+  // Botón acaba de ser presionado
+  tiempoInicio = millis();
+  } else {
+  // Botón sigue presionado
+  if (millis() - tiempoInicio >= 3000) { // 3 segundos
+  Interfaz::entrarModoProgramacion();
+  }
+  }
+  } else if (botonAnterior) {
+  // Botón fue soltado antes de los 3 segundos
+  tiempoInicio = 0;
+  }
+  }
+  botonAnterior = botonPresionado;
+  }
+
+ void servidorModoProgramacion() {
+  if (!SPIFFS.begin(true)) {
+  imprimirSerial("Error al montar SPIFFS", 'r');
+  return;
+  }
+
+  WiFi.softAP("Interfazlor", "12345678");
+  IPAddress myIP = WiFi.softAPIP();
+  imprimirSerial("Servidor web iniciado en: http://" + myIP.toString(), 'y');
+
+  // Configurar endpoints
+  server.on("/", HTTP_GET, []() {
+  if (SPIFFS.exists("/interfaz.html.gz")) {
+  File file = SPIFFS.open("/interfaz.html.gz", FILE_READ);
+  server.streamFile(file, "text/html");
+  file.close();
+  } else {
+  server.send(404, "text/plain", "Archivo no encontrado");
+  }
+  });
+
+  // Configuración GET
+  server.on("/api/config", HTTP_GET, []() {
+  DynamicJsonDocument doc(256);
+  doc["id"] = configLora.IDLora;
+  doc["channel"] = configLora.Canal;
+  doc["displayOn"] = configLora.displayOn;
+  doc["UART"] = configLora.UART;
+  doc["I2C"] = configLora.I2C;
+  doc["WiFi"] = configLora.WiFi;
+  doc["DEBUG"] = configLora.DEBUG;
+  String respuesta;
+  serializeJson(doc, respuesta);
+  server.send(200, "application/json", respuesta);
+  });
+
+  // Configuración POST
+  server.on("/api/config", HTTP_POST, []() {
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(256);
+  deserializeJson(doc, body);
+
+  String newId = doc["id"].as<String>();
+  int newChannel = doc["channel"];
+
+  if (newId.length() > 0 && newId.length() <= 3 && newChannel >= 0 && newChannel <= 8) {
+  strncpy(configLora.IDLora, newId.c_str(), sizeof(configLora.IDLora));
+  configLora.Canal = newChannel;
+
+  if (doc.containsKey("WiFi")) configLora.WiFi = doc["WiFi"];
+  if (doc.containsKey("DEBUG")) configLora.DEBUG = doc["DEBUG"];
+
+  ManejoEEPROM::guardarTarjetaConfigEEPROM();
+  lora.begin(canales[configLora.Canal]);
+  lora.startReceive();
+
+  DynamicJsonDocument responseDoc(128);
+  responseDoc["success"] = true;
+  String response;
+  serializeJson(responseDoc, response);
+  server.send(200, "application/json", response);
+
+  mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), "3.1.1.1");
+  } else {
+  server.send(400, "text/plain", "Parámetros inválidos");
+  }
+  });
+
+  // Control WiFi
+  server.on("/api/wifi", HTTP_POST, []() {
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(128);
+  deserializeJson(doc, body);
+
+  String state = doc["state"].as<String>();
+  configLora.WiFi = (state == "1");
+
+  ManejoEEPROM::guardarTarjetaConfigEEPROM();
+
+  DynamicJsonDocument responseDoc(128);
+  responseDoc["success"] = true;
+  responseDoc["message"] = "WiFi " + String(configLora.WiFi ? "activado" : "desactivado");
+  String response;
+  serializeJson(responseDoc, response);
+  server.send(200, "application/json", response);
+  });
+
+  // Escaneo WiFi
+  server.on("/api/wifi/scan", HTTP_GET, []() {
+  if (!configLora.WiFi) {
+  server.send(200, "application/json", "{\"error\":\"WiFi desactivado\"}");
+  return;
+  }
+
+  DynamicJsonDocument doc(1024);
+  JsonArray redes = doc.createNestedArray("redes");
+
+  int n = WiFi.scanNetworks(false, true);
+  imprimirSerial("Escaneando redes WiFi... Encontradas: " + String(n), 'y');
+
+  for (int i = 0; i < n; ++i) {
+  JsonObject red = redes.createNestedObject();
+  red["ssid"] = WiFi.SSID(i);
+  red["rssi"] = WiFi.RSSI(i);
+  red["channel"] = WiFi.channel(i);
+  red["encryption"] = getEncryptionType(WiFi.encryptionType(i));
+  red["encryptionType"] = (int)WiFi.encryptionType(i);
+  }
+
+  String respuesta;
+  serializeJson(doc, respuesta);
+  server.send(200, "application/json", respuesta);
+  WiFi.scanDelete();
+  });
+
+  // Conectar a WiFi
+  server.on("/api/wifi/connect", HTTP_POST, []() {
+  if (!configLora.WiFi) {
+  server.send(200, "application/json", "{\"error\":\"WiFi desactivado\"}");
+  return;
+  }
+
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(256);
+  deserializeJson(doc, body);
+
+  String ssid = doc["ssid"].as<String>();
+  String password = doc["password"].as<String>();
+
+  if (ssid.length() == 0) {
+  server.send(400, "text/plain", "SSID no puede estar vacío");
+  return;
+  }
+
+  if (ManejoEEPROM::guardarWiFiCredenciales(ssid.c_str(), password.c_str())) {
+  DynamicJsonDocument responseDoc(128);
+  responseDoc["success"] = true;
+  responseDoc["message"] = "Credenciales guardadas. Reinicie para conectar.";
+  String response;
+  serializeJson(responseDoc, response);
+  server.send(200, "application/json", response);
+  } else {
+  server.send(500, "text/plain", "Error al guardar credenciales");
+  }
+  });
+
+  // Redes guardadas
+  server.on("/api/wifi/saved", HTTP_GET, []() {
+  DynamicJsonDocument doc(512);
+  JsonArray redes = doc.createNestedArray("redes");
+
+  ManejoEEPROM::obtenerRedesGuardadas(redes);
+
+  if (redes.size() == 0) {
+  doc["message"] = "No hay redes guardadas";
+  }
+
+  String respuesta;
+  serializeJson(doc, respuesta);
+  server.send(200, "application/json", respuesta);
+  });
+
+  // Eliminar red guardada
+  server.on("/api/wifi/remove", HTTP_POST, []() {
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(256);
+  deserializeJson(doc, body);
+
+  String ssid = doc["ssid"].as<String>();
+
+  if (ssid.length() == 0) {
+  server.send(400, "text/plain", "SSID no puede estar vacío");
+  return;
+  }
+
+  if (ManejoEEPROM::eliminarRedWiFi(ssid.c_str())) {
+  DynamicJsonDocument responseDoc(128);
+  responseDoc["success"] = true;
+  responseDoc["message"] = "Red eliminada correctamente";
+  String response;
+  serializeJson(responseDoc, response);
+  server.send(200, "application/json", response);
+  } else {
+  server.send(500, "text/plain", "Error al eliminar red");
+  }
+  });
+
+  // Control de pantalla
+  server.on("/api/display", HTTP_POST, []() {
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(128);
+  deserializeJson(doc, body);
+
+  String state = doc["state"].as<String>();
+  configurarDisplay(state == "1");
+
+  ManejoEEPROM::guardarTarjetaConfigEEPROM();
+  server.send(200, "application/json", "{\"success\":true}");
+  });
+
+  // Prueba de pantalla
+  server.on("/api/display/test", HTTP_POST, []() {
+  String currentId = String(configLora.IDLora);
+  mostrarMensaje("Prueba Pantalla", "ID: " + currentId, 3000);
+  server.send(200, "application/json", "{\"success\":true}");
+  });
+
+  // Control UART
+  server.on("/api/uart", HTTP_POST, []() {
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(128);
+  deserializeJson(doc, body);
+
+  String state = doc["state"].as<String>();
+  configLora.UART = (state == "1");
+
+  ManejoEEPROM::guardarTarjetaConfigEEPROM();
+  ManejoComunicacion::initUART();
+
+  DynamicJsonDocument responseDoc(128);
+  responseDoc["success"] = true;
+  responseDoc["message"] = "UART " + String(configLora.UART ? "activado" : "desactivado");
+  String response;
+  serializeJson(responseDoc, response);
+  server.send(200, "application/json", response);
+  });
+
+  // Control I2C
+  server.on("/api/i2c", HTTP_POST, []() {
+  if (!server.hasArg("plain")) {
+  server.send(400, "text/plain", "Bad Request");
+  return;
+  }
+
+  String body = server.arg("plain");
+  DynamicJsonDocument doc(128);
+  deserializeJson(doc, body);
+
+  String state = doc["state"].as<String>();
+  configLora.I2C = (state == "1");
+
+  ManejoEEPROM::guardarTarjetaConfigEEPROM();
+  ManejoComunicacion::initI2C();
+
+  DynamicJsonDocument responseDoc(128);
+  responseDoc["success"] = true;
+  responseDoc["message"] = "I2C " + String(configLora.I2C ? "activado" : "desactivado");
+  String response;
+  serializeJson(responseDoc, response);
+  server.send(200, "application/json", response);
+  });
+
+  // Escaneo I2C
+  server.on("/api/i2c/scan", HTTP_GET, []() {
+  if (!configLora.I2C) {
+  server.send(200, "application/json", "{\"error\":\"I2C desactivado\"}");
+  return;
+  }
+
+  DynamicJsonDocument doc(512);
+  JsonArray dispositivos = doc.createNestedArray("dispositivos");
+
+  byte error, address;
+  for (address = 1; address < 127; address++) {
+  Wire.beginTransmission(address);
+  error = Wire.endTransmission();
+
+  if (error == 0) {
+  JsonObject dispositivo = dispositivos.createNestedObject();
+  dispositivo["direccion"] = "0x" + String(address, HEX);
+
+  if (address == 0x3C) dispositivo["tipo"] = "Pantalla OLED";
+  else if (address == 0x68) dispositivo["tipo"] = "Reloj RTC";
+  else if (address == 0x76) dispositivo["tipo"] = "Sensor BME280";
+  else dispositivo["tipo"] = "Desconocido";
+  }
+  delay(1);
+  }
+
+  String respuesta;
+  serializeJson(doc, respuesta);
+  server.send(200, "application/json", respuesta);
+  });
+
+  // Reinicio del dispositivo
+  server.on("/api/reboot", HTTP_POST, []() {
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"Reiniciando dispositivo...\"}");
+  delay(500);
+  ESP.restart();
+  });
+
+  // Manejador para rutas no encontradas
+  server.onNotFound([]() {
+  server.send(404, "text/plain", "Ruta no encontrada");
+  });
+
+  server.begin();
+
+  while (modoProgramacion) {
+  server.handleClient();
+  delay(10);
+  }
+  }
+
+String getEncryptionType(wifi_auth_mode_t encryptionType) {
+switch (encryptionType) {
+case WIFI_AUTH_OPEN: return "Abierta";
+case WIFI_AUTH_WEP: return "WEP";
+case WIFI_AUTH_WPA_PSK: return "WPA-PSK";
+case WIFI_AUTH_WPA2_PSK: return "WPA2-PSK";
+case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2-PSK";
+case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2-Enterprise";
+default: return "Desconocido";
+}
 }
 
-void endpointsMProg(void *pvParameters) {
-  imprimirSerial("Modo Programacion Falso", 'b');
-}
+

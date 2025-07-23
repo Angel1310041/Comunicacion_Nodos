@@ -1,1123 +1,761 @@
-/**
- * Script.js - Versión con tabla de condiciones GPIO mejorada
- */
-document.addEventListener('DOMContentLoaded', () => {
-const $ = id => document.getElementById(id);
-
-// Estado global
-let sistema = {
-pantalla: null,
-wifi: { ssid: '', password: '', connected: false, availableNetworks: [], savedNetworks: [] },
-datos: { id: '', canal: '' },
-uart: { baudrate: 115200, dataBits: 8, parity: 'none', stopBits: 1, enabled: false },
-i2c: { clockSpeed: 100, sdaPin: 21, sclPin: 22, enabled: false },
-gpio: { condiciones: [] }
-};
-let currentSsidToConnect = '';
-let isUpdateMode = false;
-
-// 1. Toast y persistencia
-function showToast(msg, type = 'info') {
-let toastContainer = $('toastContainer');
-if (!toastContainer) {
-toastContainer = document.createElement('div');
-toastContainer.id = 'toastContainer';
-toastContainer.style.position = 'fixed';
-toastContainer.style.bottom = '20px';
-toastContainer.style.right = '20px';
-toastContainer.style.zIndex = '10000';
-toastContainer.style.display = 'flex';
-toastContainer.style.flexDirection = 'column';
-toastContainer.style.gap = '10px';
-document.body.appendChild(toastContainer);
-}
-const toast = document.createElement('div');
-toast.className = `toast ${type}`;
-toast.textContent = msg;
-toast.style.backgroundColor = type === 'success' ? '#28a745'
-: type === 'error' ? '#dc3545'
-: type === 'info' ? '#17a2b8'
-: '#333';
-toast.style.color = 'white';
-toast.style.padding = '12px 20px';
-toast.style.borderRadius = '5px';
-toast.style.boxShadow = '0 3px 10px rgba(0,0,0,0.2)';
-toast.style.opacity = '1';
-toast.style.transition = 'opacity 0.5s, transform 0.5s';
-toast.style.minWidth = '250px';
-toast.style.textAlign = 'center';
-toastContainer.appendChild(toast);
-setTimeout(() => {
-toast.style.opacity = '0';
-toast.addEventListener('transitionend', () => toast.remove());
-}, 3000);
-}
-
-function guardarEstado() {
-localStorage.setItem('sistema', JSON.stringify(sistema));
-}
-
-function cargarEstado() {
-try {
-const saved = JSON.parse(localStorage.getItem('sistema'));
-if (saved) {
-sistema.pantalla = saved.pantalla !== undefined ? saved.pantalla : sistema.pantalla;
-sistema.wifi = saved.wifi || sistema.wifi;
-sistema.datos = saved.datos || sistema.datos;
-sistema.uart = saved.uart || sistema.uart;
-sistema.i2c = saved.i2c || sistema.i2c;
-sistema.gpio = saved.gpio || sistema.gpio;
-}
-} catch (e) {
-console.error('Error cargando estado:', e);
-}
-}
-
-// 2. Modal WiFi
-function showPasswordModal(ssid, isUpdate = false) {
-currentSsidToConnect = ssid;
-isUpdateMode = isUpdate;
-$('modalSsidName').textContent = isUpdate ? `Actualizar "${ssid}"` : `Contraseña para "${ssid}"`;
-$('wifiPasswordInput').value = '';
-$('wifiPasswordError').textContent = '';
-$('wifiPasswordError').style.display = 'none';
-$('wifiPasswordInput').classList.remove('error');
-$('wifiPasswordModal').classList.add('active');
-}
-
-function hidePasswordModal() {
-$('wifiPasswordModal').classList.remove('active');
-}
-
-$('connectWifiButton').onclick = function() {
-const password = $('wifiPasswordInput').value.trim();
-if (!password) {
-$('wifiPasswordError').textContent = 'La contraseña no puede estar vacía.';
-$('wifiPasswordError').style.display = 'block';
-$('wifiPasswordInput').classList.add('error');
-$('wifiPasswordInput').focus();
-return;
-}
-$('wifiPasswordInput').classList.remove('error');
-if (isUpdateMode) {
-actualizarRedConValidacion(currentSsidToConnect, password);
-} else {
-guardarRedConValidacion(currentSsidToConnect, password);
-}
-};
-
-$('cancelWifiButton').onclick = hidePasswordModal;
-
-// 3. Render y lógica principal
-function render(subsection) {
-actualizarResumenInicio();
-
-if (subsection === 'pantalla') {
-$('funciones-content').innerHTML = `
-<div class="pantalla-status-box">
-<h4>Control de Pantalla</h4>
-<div class="pantalla-status-row">
-<span>Estado actual: <strong id="pantallaSubEstado">${sistema.pantalla === null ? '----' : (sistema.pantalla ? 'Encendida' : 'Apagada')}</strong></span>
-</div>
-<div class="pantalla-status-actions">
-<button id="pantallaSubEncender" class="action-button success-button"><i class="fas fa-power-off"></i> Encender</button>
-<button id="pantallaSubApagar" class="action-button danger-button"><i class="fas fa-power-off"></i> Apagar</button>
-</div>
-</div>`;
-
-$('pantallaSubEncender').onclick = () => {
-fetch('/pantalla/on').then(res => res.json()).then(() => {
-sistema.pantalla = true; 
-guardarEstado(); 
-render('pantalla'); 
-showToast('Pantalla encendida', 'success');
-actualizarResumenInicio();
-}).catch(() => showToast('Error al encender pantalla', 'error'));
-};
-
-$('pantallaSubApagar').onclick = () => {
-fetch('/pantalla/off').then(res => res.json()).then(() => {
-sistema.pantalla = false; 
-guardarEstado(); 
-render('pantalla'); 
-showToast('Pantalla apagada', 'success');
-actualizarResumenInicio();
-}).catch(() => showToast('Error al apagar pantalla', 'error'));
-};
-
-} else if (subsection === 'wifi') {
-$('funciones-content').innerHTML = `
-<div class="wifi-sub-section">
-<h4>Configuración de WiFi</h4>
-<div class="wifi-options-buttons">
-<button id="showAvailableNetworksBtn" class="action-button active">Redes Disponibles</button>
-<button id="showSavedNetworksBtn" class="action-button">Redes Guardadas</button>
-</div>
-<div id="availableNetworksSection" class="wifi-section-content active-content">
-<div class="action-buttons-container">
-<button id="showAvailableNetworksListBtn" class="action-button success-button">Mostrar Redes Disponibles</button>
-</div>
-<div class="wifi-table-container">
-<table class="wifi-table" id="availableNetworksTable">
-<thead>
-<tr>
-<th>SSID</th>
-<th>Seguridad</th>
-<th>Intensidad</th>
-<th>Acciones</th>
-</tr>
-</thead>
-<tbody id="availableNetworksTableBody">
-<tr>
-<td colspan="4" class="no-data-message">Presione el botón para Obtener las Redes Disponibles</td>
-</tr>
-</tbody>
-</table>
-</div>
-<p id="noAvailableNetworks" class="no-data-message" style="display:none;">No se encontraron redes disponibles.</p>
-</div>
-<div id="savedNetworksSection" class="wifi-section-content">
-<div class="action-buttons-container">
-<button id="showSavedNetworksListBtn" class="action-button success-button">Mostrar Redes Guardadas</button>
-<button id="clearAllSavedNetworksBtn" class="action-button danger-button">Borrar Todas las Redes Guardadas</button>
-</div>
-<div class="wifi-table-container">
-<table class="wifi-table" id="savedNetworksTable">
-<thead>
-<tr>
-<th>Nombre Red</th>
-<th>Acciones</th>
-</tr>
-</thead>
-<tbody id="savedNetworksTableBody">
-<tr>
-<td colspan="2" class="no-data-message">Presione el botón para Obtener las Redes Guardadas</td>
-</tr>
-</tbody>
-</table>
-</div>
-<p id="noSavedNetworks" class="no-data-message" style="display:none;">No hay redes guardadas.</p>
-</div>
-</div>`;
-setupWifiSection();
-
-} else if (subsection === 'uart') {
-$('funciones-content').innerHTML = `
-<div class="config-section">
-<div class="config-box">
-<h3><i class="fas fa-microchip"></i> Configuración UART</h3>
-<div class="config-actions">
-<button id="enableUartBtn" class="action-button ${sistema.uart.enabled ? 'active-button' : 'success-button'}">Habilitar UART</button>
-<button id="disableUartBtn" class="action-button ${!sistema.uart.enabled ? 'active-button' : 'danger-button'}">Deshabilitar UART</button>
-</div>
-</div>
-</div>`;
-
-// Event listeners para UART
-$('enableUartBtn').onclick = () => {
-fetch('/enableUart', {
-method: 'POST',
-headers: {'Content-Type': 'application/json'}
-})
-.then(res => res.json())
-.then(data => {
-if (data.success) {
-sistema.uart.enabled = true;
-$('enableUartBtn').classList.add('active-button');
-$('enableUartBtn').classList.remove('success-button');
-$('disableUartBtn').classList.remove('active-button');
-$('disableUartBtn').classList.add('danger-button');
-showToast('UART habilitado correctamente', 'success');
-guardarEstado();
-} else {
-showToast('Error al habilitar UART', 'error');
-}
-})
-.catch(() => showToast('Error de conexión', 'error'));
-};
-
-$('disableUartBtn').onclick = () => {
-fetch('/disableUart', {
-method: 'POST',
-headers: {'Content-Type': 'application/json'}
-})
-.then(res => res.json())
-.then(data => {
-if (data.success) {
-sistema.uart.enabled = false;
-$('disableUartBtn').classList.add('active-button');
-$('disableUartBtn').classList.remove('danger-button');
-$('enableUartBtn').classList.remove('active-button');
-$('enableUartBtn').classList.add('success-button');
-showToast('UART deshabilitado correctamente', 'success');
-guardarEstado();
-} else {
-showToast('Error al deshabilitar UART', 'error');
-}
-})
-.catch(() => showToast('Error de conexión', 'error'));
-};
-
-} else if (subsection === 'i2c') {
-$('funciones-content').innerHTML = `
-<div class="config-section">
-<div class="config-box">
-<h3><i class="fas fa-microchip"></i> Configuración I2C</h3>
-<div class="config-actions">
-<button id="enableI2cBtn" class="action-button ${sistema.i2c.enabled ? 'active-button' : 'success-button'}">Habilitar I2C</button>
-<button id="disableI2cBtn" class="action-button ${!sistema.i2c.enabled ? 'active-button' : 'danger-button'}">Deshabilitar I2C</button>
-<button id="testI2cBtn" class="action-button info-button" ${!sistema.i2c.enabled ? 'disabled' : ''}>
-<i class="fas fa-vial"></i> Test I2C
-</button>
-</div>
-</div>
-</div>`;
-
-// Event listeners para I2C
-$('enableI2cBtn').onclick = () => {
-fetch('/enableI2c', {
-method: 'POST',
-headers: {'Content-Type': 'application/json'}
-})
-.then(res => res.json())
-.then(data => {
-if (data.success) {
-sistema.i2c.enabled = true;
-$('enableI2cBtn').classList.add('active-button');
-$('enableI2cBtn').classList.remove('success-button');
-$('disableI2cBtn').classList.remove('active-button');
-$('disableI2cBtn').classList.add('danger-button');
-$('testI2cBtn').disabled = false;
-showToast('I2C habilitado correctamente', 'success');
-guardarEstado();
-} else {
-showToast('Error al habilitar I2C', 'error');
-}
-})
-.catch(() => showToast('Error de conexión', 'error'));
-};
-
-$('disableI2cBtn').onclick = () => {
-fetch('/disableI2c', {
-method: 'POST',
-headers: {'Content-Type': 'application/json'}
-})
-.then(res => res.json())
-.then(data => {
-if (data.success) {
-sistema.i2c.enabled = false;
-$('disableI2cBtn').classList.add('active-button');
-$('disableI2cBtn').classList.remove('danger-button');
-$('enableI2cBtn').classList.remove('active-button');
-$('enableI2cBtn').classList.add('success-button');
-$('testI2cBtn').disabled = true;
-showToast('I2C deshabilitado correctamente', 'success');
-guardarEstado();
-} else {
-showToast('Error al deshabilitar I2C', 'error');
-}
-})
-.catch(() => showToast('Error de conexión', 'error'));
-};
-
-$('testI2cBtn').onclick = () => {
-showToast('Iniciando pruebas I2C...', 'info');
-fetch('/testI2c')
-.then(res => res.json())
-.then(data => {
-if (data.success) {
-showToast('Pruebas I2C completadas: ' + data.message, 'success');
-} else {
-showToast('Error en pruebas I2C: ' + data.message, 'error');
-}
-})
-.catch(() => showToast('Error al realizar pruebas I2C', 'error'));
-};
-
-} else if (subsection === 'gpio') {
-$('funciones-content').innerHTML = `
-<div class="gpio-main-content">
-<div class="gpio-white-box">
-<h3>Configuración GPIO</h3>
-<p>Seleccione una opción del menú lateral para gestionar los GPIO</p>
-</div>
-</div>`;
-
-// Mostrar submenú GPIO
-$('gpioSubmenu').classList.add('active');
-$('submenuOverlay').style.display = 'block';
-
-} else if (subsection === 'gpio-archivos') {
-$('funciones-content').innerHTML = `
-<div class="gpio-file-section">
-<h4>Archivos GPIO</h4>
-<div class="file-actions">
-<div class="file-action-group">
-<button id="downloadGpioConfigBtn" class="action-button success-button">
-<i class="fas fa-download"></i> Descargar Configuración
-</button>
-<p class="file-action-description">Descargar la configuración actual en formato JSON</p>
-</div>
-<div class="file-action-group">
-<button id="uploadGpioConfigBtn" class="action-button info-button">
-<i class="fas fa-upload"></i> Subir Configuración
-</button>
-<p class="file-action-description">Subir un archivo JSON para actualizar la configuración</p>
-</div>
-<input type="file" id="gpioConfigFileInput" accept=".json" style="display: none;">
-</div>
-<div id="gpioFileStatus" class="file-status"></div>
-</div>`;
-
-$('downloadGpioConfigBtn').onclick = downloadGpioConfig;
-$('uploadGpioConfigBtn').onclick = () => $('gpioConfigFileInput').click();
-
-$('gpioConfigFileInput').onchange = function(e) {
-const file = e.target.files[0];
-if (!file) return;
-
-const fileStatus = $('gpioFileStatus');
-fileStatus.textContent = `Archivo seleccionado: ${file.name}`;
-fileStatus.style.color = '#17a2b8';
-
-if (file.type !== "application/json" && !file.name.endsWith('.json')) {
-fileStatus.textContent = 'Error: El archivo debe ser un JSON válido';
-fileStatus.style.color = '#dc3545';
-return;
-}
-
-const reader = new FileReader();
-reader.onload = function(e) {
-try {
-const jsonData = JSON.parse(e.target.result);
-fileStatus.textContent = 'Procesando archivo...';
-uploadGpioConfig(jsonData);
-} catch (error) {
-fileStatus.textContent = 'Error: El archivo JSON no es válido';
-fileStatus.style.color = '#dc3545';
-console.error('Error parsing JSON:', error);
-}
-};
-reader.onerror = function() {
-fileStatus.textContent = 'Error al leer el archivo';
-fileStatus.style.color = '#dc3545';
-};
-reader.readAsText(file);
-};
-
-} else if (subsection === 'gpio-condicion') {
-$('funciones-content').innerHTML = `
-<div class="gpio-condicion-section">
-<h4>Matriz de Condiciones GPIO</h4>
-
-<div class="gpio-matrix-container">
-<div class="gpio-matrix">
-<!-- Cabecera con letras -->
-<div class="matrix-header">
-<div class="matrix-corner">+\\*</div>
-${['A','B','C','D','E','F'].map(letter => `
-<div class="matrix-header-cell">${letter}</div>
-`).join('')}
-</div>
-
-<!-- Filas con números y letras -->
-<div class="matrix-body">
-${Array.from({length: 12}, (_, row) => {
-const rowNum = row + 1;
-const outputLetter = String.fromCharCode(79 + row); // O-Z
-return `
-<div class="matrix-row">
-<!-- Número de fila -->
-<div class="matrix-row-header">${rowNum}</div>
-
-<!-- Celdas de condición -->
-${['A','B','C','D','E','F'].map((letter, col) => {
-const cellId = `${rowNum}${letter}`;
-// Si es la celda 4D, no mostrar nada
-if (cellId === '4D') return `
-<div class="matrix-cell" data-row="4" data-col="D" data-id="4D">
-<span class="cell-content"></span>
-</div>
-`;
-const existingCond = sistema.gpio.condiciones.find(
-cond => cond.comando.includes(cellId)
-);
-const cellContent = existingCond ? 
-`${existingCond.pin}${existingCond.tipo}${existingCond.direccion}${existingCond.id}` : '';
-return `
-<div class="matrix-cell ${existingCond ? 'active' : ''}" 
-data-row="${rowNum}" 
-data-col="${letter}"
-data-id="${cellId}">
-<span class="cell-content">${cellContent}</span>
-</div>
-`;
-}).join('')}                                       
-<!-- Letra de salida -->
-<div class="matrix-row-footer">
-${outputLetter}
-</div>
-</div>
-`;
-}).join('')}
-</div>
-</div>
-
-</div>
-</div>
-</div>`;
-
-// Función para actualizar la tabla de condiciones
-function updateConditionsTable() {
-const tbody = $('gpioConditionsBody');
-tbody.innerHTML = sistema.gpio.condiciones.length > 0 ? 
-sistema.gpio.condiciones.map(cond => `
-<tr data-command="${cond.comando}">
-<td>${cond.comando}</td>
-<td>${cond.pin}</td>
-<td>${cond.tipo === 'E' ? 'Entrada' : 'Salida'}</td>
-<td>${cond.direccion === 'A' ? 'Ascendente' : 'Descendente'}</td>
-<td>${cond.id}</td>
-<td>
-<button class="action-button danger-button delete-cond" 
-data-command="${cond.comando}">
-<i class="fas fa-trash"></i>
-</button>
-</td>
-</tr>
-`).join('') : `
-<tr>
-<td colspan="6" class="no-conditions">No hay condiciones configuradas</td>
-</tr>`;
-
-// Agregar event listeners a los botones de eliminar
-document.querySelectorAll('.delete-cond').forEach(btn => {
-btn.addEventListener('click', function() {
-const command = this.getAttribute('data-command');
-if (confirm(`¿Eliminar la condición "${command}"?`)) {
-sistema.gpio.condiciones = sistema.gpio.condiciones.filter(
-cond => cond.comando !== command
-);
-guardarEstado();
-updateConditionsTable();
-updateMatrixCells();
-showToast('Condición eliminada', 'success');
-}
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    const apiUrl = 'http://' + window.location.hostname + '/api';
+    let currentConfig = {};
+document.getElementById('lora-id').addEventListener('input', function () {
+    // Eliminar caracteres que no sean letras o números y limitar a 3 caracteres
+    this.value = this.value
+        .replace(/[^A-Za-z0-9]/g, '')  // Solo letras y números
+        .replace(/ñ/gi, '')            // Elimina la ñ (mayúscula o minúscula)
+        .substring(0, 3);              // Limita a 3 caracteres
 });
-});
-}
-
-// Función para actualizar las celdas de la matriz
-
-
-// Event listener para las celdas de la matriz
-document.querySelectorAll('.matrix-cell').forEach(cell => {
-cell.addEventListener('click', function() {
-// Quitar selección de todas las celdas
-document.querySelectorAll('.matrix-cell').forEach(c => {
-c.classList.remove('selected');
+document.getElementById('lora-channel').addEventListener('input', function () {
+    const valor = this.value.replace(/[^0-9]/g, ''); // Solo dígitos
+    if (valor === '' || parseInt(valor) < 0 || parseInt(valor) > 8) {
+        this.value = ''; // Limpiar si no está en el rango
+    } else {
+        this.value = valor[0]; // Asegura que sea un solo número
+    }
 });
 
-// Seleccionar la celda actual
-this.classList.add('selected');
+    // Elementos del DOM
+    const menuBtn = document.getElementById('menu-btn');
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const menuLinks = document.querySelectorAll('.menu-list a');
+    const sections = document.querySelectorAll('.content-section');
+    const i2cDevicesList = document.getElementById('i2c-devices');
+    const wifiEnabledCheckbox = document.getElementById('wifi-enabled');
 
-const cellId = this.getAttribute('data-id');
-const row = cellId[0];
-const col = cellId[1];
+    // Inicialización
+    initMenu();
+    loadCurrentConfig();
+    setupEventListeners();
+    initWiFiSection();
 
-// Autorellenar los campos con los valores de la celda
-$('gpioCondId').value = row;
+    function initMenu() {
+        // Botón de menú hamburguesa
+        menuBtn.addEventListener('click', function() {
+            sidebar.classList.toggle('active');
+            mainContent.classList.toggle('shifted');
+            toggleMenuAnimation();
+        });
 
-// Buscar si ya existe una condición para esta celda
-const existingCond = sistema.gpio.condiciones.find(
-cond => cond.comando.includes(cellId)
-);
+        // Submenú desplegable
+        const submenuToggle = document.querySelector('.submenu-toggle');
+        if (submenuToggle) {
+            submenuToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.parentElement.classList.toggle('active');
+                document.querySelector('.submenu').classList.toggle('active');
+            });
+        }
 
-if (existingCond) {
-$('gpioPinSelect').value = existingCond.pin;
-$('gpioTypeSelect').value = existingCond.tipo;
-$('gpioDirSelect').value = existingCond.direccion;
-$('gpioCondId').value = existingCond.id;
-}
-});
-});
+        // Navegación entre secciones
+        menuLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (!this.classList.contains('submenu-toggle')) {
+                    e.preventDefault();
+                    showSection(this.getAttribute('data-section'));
+                    closeMenuOnMobile();
+                }
+            });
+        });
+    }
 
-// Event listener para guardar condición
-$('saveGpioCondBtn').addEventListener('click', function() {
-const pin = $('gpioPinSelect').value;
-const tipo = $('gpioTypeSelect').value;
-const direccion = $('gpioDirSelect').value;
-const id = $('gpioCondId').value;
+    function toggleMenuAnimation() {
+        const spans = menuBtn.querySelectorAll('span');
+        if (sidebar.classList.contains('active')) {
+            spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+            spans[1].style.opacity = '0';
+            spans[2].style.transform = 'rotate(-45deg) translate(7px, -6px)';
+        } else {
+            spans[0].style.transform = 'none';
+            spans[1].style.opacity = '1';
+            spans[2].style.transform = 'none';
+        }
+    }
 
-if (!id || !/^\d{1,2}$/.test(id) || parseInt(id) < 1 || parseInt(id) > 12) {
-showToast('Ingrese un ID válido (1-12)', 'error');
-return;
-}
+    function closeMenuOnMobile() {
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('active');
+            mainContent.classList.remove('shifted');
+            toggleMenuAnimation();
+        }
+    }
 
-// Obtener la celda seleccionada
-const selectedCell = document.querySelector('.matrix-cell.selected');
-if (!selectedCell) {
-showToast('Seleccione una celda en la matriz primero', 'error');
-return;
-}
+    function showSection(sectionId) {
+        sections.forEach(section => section.classList.remove('active'));
+        const targetSection = sectionId === 'salir' ?
+            document.getElementById('salir-section') :
+            document.getElementById(`${sectionId}-section`);
+        if (targetSection) targetSection.classList.add('active');
+    }
 
-const cellId = selectedCell.getAttribute('data-id');
-const comando = `${cellId}${pin}${tipo}${direccion}${id}`;
+    async function loadCurrentConfig() {
+        try {
+            const response = await fetch(`${apiUrl}/config`);
+            currentConfig = await response.json();
 
-// Eliminar cualquier condición existente para esta celda
-sistema.gpio.condiciones = sistema.gpio.condiciones.filter(
-cond => !cond.comando.includes(cellId)
-);
+            document.getElementById('current-id').textContent = currentConfig.id || 'HELTEC01';
+            document.getElementById('current-channel').textContent = currentConfig.channel || '0';
+            document.getElementById('current-wifi').textContent = currentConfig.WiFi ? 'Activado' : 'Desactivado';
+            document.getElementById('lora-id').value = currentConfig.id || 'HELTEC01';
+            document.getElementById('lora-channel').value = currentConfig.channel || '0';
+            wifiEnabledCheckbox.checked = currentConfig.WiFi || false;
 
-// Agregar la nueva condición
-sistema.gpio.condiciones.push({
-comando,
-pin,
-tipo,
-direccion,
-id,
-celda: cellId
-});
+            updateButtonStates();
+        } catch (error) {
+            console.error('Error al cargar configuración:', error);
+            setDefaultValues();
+        }
+    }
 
-guardarEstado();
-updateConditionsTable();
-updateMatrixCells();
-showToast('Condición guardada correctamente', 'success');
+    function setDefaultValues() {
+        document.getElementById('current-id').textContent = 'HELTEC01';
+        document.getElementById('current-channel').textContent = '0';
+        document.getElementById('current-wifi').textContent = 'Desactivado';
+        document.getElementById('lora-id').value = 'HELTEC01';
+        document.getElementById('lora-channel').value = '0';
+        wifiEnabledCheckbox.checked = false;
+    }
 
-// Deseleccionar la celda
-selectedCell.classList.remove('selected');
-});
+    function updateButtonStates() {
+        const updateButton = (elementId, isActive) => {
+            const btn = document.getElementById(elementId);
+            if (btn) {
+                btn.classList.toggle('active', isActive);
+            }
+        };
 
-// Event listener para limpiar todo
-$('clearGpioCondBtn').addEventListener('click', function() {
-if (confirm('¿Está seguro que desea eliminar todas las condiciones?')) {
-sistema.gpio.condiciones = [];
-guardarEstado();
-updateConditionsTable();
-updateMatrixCells();
-showToast('Todas las condiciones han sido eliminadas', 'success');
+        updateButton('activar-pantalla', currentConfig.displayOn);
+        updateButton('apagar-pantalla', !currentConfig.displayOn);
+        updateButton('activar-uart', currentConfig.UART);
+        updateButton('apagar-uart', !currentConfig.UART);
+        updateButton('activar-wifi', currentConfig.WiFi);
+        updateButton('apagar-wifi', !currentConfig.WiFi);
+        updateButton('escaner-i2c', currentConfig.I2C);
+        updateButton('desactivar-i2c', !currentConfig.I2C);
+    }
 
-// Deseleccionar cualquier celda seleccionada
-document.querySelectorAll('.matrix-cell').forEach(c => {
-c.classList.remove('selected');
-});
+    function setupEventListeners() {
+        // Formulario de configuración LoRa
+        const configForm = document.getElementById('config-form');
+        if (configForm) {
+            configForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const id = document.getElementById('lora-id').value;
+                const channel = document.getElementById('lora-channel').value;
+                const wifiEnabled = wifiEnabledCheckbox.checked;
 
-// Limpiar campos
-$('gpioCondId').value = '';
-}
-});
+                if (!validateConfigInput(id, channel)) return;
 
-// Inicializar la tabla y la matriz
-updateConditionsTable();
-updateMatrixCells();
+                try {
+                    const response = await fetch(`${apiUrl}/config`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, channel, WiFi: wifiEnabled })
+                    });
+                    const data = await response.json();
 
-} else if (subsection === 'inicio') {
-actualizarResumenInicio();
-}
-}
+                    if (data.success) {
+                        showAlert('success', 'Configuración guardada correctamente');
+                        updateUIWithNewConfig(id, channel, wifiEnabled);
+                    } else {
+                        throw new Error(data.message || 'Error desconocido');
+                    }
+                } catch (error) {
+                    showError('Error al guardar configuración:', error);
+                }
+            });
+        }
 
-function actualizarResumenInicio() {
-$('perro_diecinueve').textContent = sistema.pantalla === null ? '----' : (sistema.pantalla ? 'ENCENDIDA' : 'APAGADA');
-$('perro_veintiuno').textContent = sistema.wifi.connected ? `Conectado a: ${sistema.wifi.ssid}` : '----';
-$('perro_veintiuno').style.color = sistema.wifi.connected ? '#2ecc71' : '#e74c3c';
-$('perro_id_value').textContent = sistema.datos.id || '---';
-$('perro_canal_value').textContent = sistema.datos.canal || '---';
-}
+        // Asignar eventos a los botones
+        setupButton('activar-pantalla', () => sendDisplayCommand('1'));
+        setupButton('apagar-pantalla', () => sendDisplayCommand('0'));
+        setupButton('prueba-pantalla', () => {
+            const currentId = document.getElementById('current-id').textContent;
+            sendDisplayTestCommand(currentId);
+        });
 
-// 4. Funciones para GPIO
-function downloadGpioConfig() {
-showToast('Descargando configuración GPIO...', 'info');
-fetch('/getGpioConfig')
-.then(response => response.json())
-.then(data => {
-const dataStr = JSON.stringify(data, null, 2);
-const dataBlob = new Blob([dataStr], { type: 'application/json' });
-const url = URL.createObjectURL(dataBlob);
-const a = document.createElement('a');
-a.href = url;
-a.download = 'gpio_config.json';
-document.body.appendChild(a);
-a.click();
-setTimeout(() => {
-document.body.removeChild(a);
-URL.revokeObjectURL(url);
-}, 0);
-showToast('Configuración descargada correctamente', 'success');
-$('gpioFileStatus').textContent = 'Configuración descargada con éxito';
-$('gpioFileStatus').style.color = '#28a745';
-})
-.catch(error => {
-console.error('Error downloading GPIO config:', error);
-showToast('Error al descargar configuración', 'error');
-$('gpioFileStatus').textContent = 'Error al descargar configuración';
-$('gpioFileStatus').style.color = '#dc3545';
-});
-}
+        setupButton('activar-uart', () => sendUartCommand('1'));
+        setupButton('apagar-uart', () => sendUartCommand('0'));
 
-function uploadGpioConfig(config) {
-showToast('Subiendo configuración GPIO...', 'info');
-fetch('/setGpioConfig', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify(config)
-})
-.then(response => response.json())
-.then(data => {
-if (data.success) {
-showToast('Configuración GPIO actualizada correctamente', 'success');
-$('gpioFileStatus').textContent = 'Configuración actualizada con éxito';
-$('gpioFileStatus').style.color = '#28a745';
-} else {
-showToast('Error al actualizar configuración GPIO', 'error');
-$('gpioFileStatus').textContent = 'Error al actualizar configuración';
-$('gpioFileStatus').style.color = '#dc3545';
-}
-})
-.catch(error => {
-console.error('Error uploading GPIO config:', error);
-showToast('Error al subir configuración', 'error');
-$('gpioFileStatus').textContent = 'Error al subir configuración';
-$('gpioFileStatus').style.color = '#dc3545';
-});
-}
+        setupButton('escaner-i2c', scanI2CDevices);
+        setupButton('desactivar-i2c', () => sendI2CCommand('0'));
 
-// 5. Lógica WiFi
-/**
-* Guarda una red WiFi, pero solo si hay menos de 3 redes guardadas.
-*/
-function guardarRedConValidacion(ssid, password) {
-fetch('/redesGuardadas')
-.then(res => res.json())
-.then(data => {
-const networks = data.networks || [];
-if (networks.length >= 3) {
-showToast('Solo puedes guardar hasta 3 redes WiFi.', 'error');
-hidePasswordModal();
-return;
-}
-showToast('Guardando red...', 'info');
-fetch('/guardarRed', {
-method: 'POST',
-headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-body: `ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`
-})
-.then(res => res.json())
-.then(data => {
-if (data.mensaje) {
-showToast('Red guardada correctamente', 'success');
-sistema.wifi.ssid = ssid;
-sistema.wifi.connected = true;
-guardarEstado();
-actualizarResumenInicio();
-obtenerRedesGuardadas();
-hidePasswordModal();
-// Ya no se reinicia aquí
-} else {
-showToast('Error al guardar la red', 'error');
-}
-})
-.catch(() => showToast('Error al guardar la red', 'error'));
-})
-.catch(() => {
-showToast('Error al verificar redes guardadas', 'error');
-});
-}
-function actualizarRedConValidacion(ssid, password) {
-showToast('Actualizando red...', 'info');
-//Actualizar una red
-fetch('/actualizarRed', {
-method: 'POST',
-headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-body: `ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`
-})
-.then(res => res.json())
-.then(data => {
-if (data.mensaje) {
-showToast('Red actualizada correctamente', 'success');
-obtenerRedesGuardadas();
-hidePasswordModal();
-} else {
-showToast('Error al actualizar la red', 'error');
-}
-})
-.catch(() => showToast('Error al actualizar la red', 'error'));
-}
+        // Configuración de los botones de salida
+// Reemplaza esta parte del código:
+setupButton('reiniciar-dispositivo', () => {
+    showConfirmDialog('¿Estás seguro que deseas reiniciar la tarjeta Heltec?', async () => {
+        try {
+            const response = await fetch(`${apiUrl}/reboot`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-function conectarRed(ssid) {
-showToast('Conectando...', 'info');
-//Conectar la una red 
-fetch('/conectarRed', {
-method: 'POST',
-headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-body: `ssid=${encodeURIComponent(ssid)}`
-})
-.then(res => res.json())
-.then(data => {
-showToast('Configuración guardada. Reconectando...', 'success');
-sistema.wifi.ssid = ssid;
-sistema.wifi.connected = true;
-guardarEstado();
-actualizarResumenInicio();
-// Ya no se reinicia aquí
-})
-.catch(() => showToast('Error al conectar a la red', 'error'));
-}
-
-function obtenerRedesGuardadas() {
-const savedTableBody = document.getElementById('savedNetworksTableBody');
-const noSavedMsg = document.getElementById('noSavedNetworks');
-if (savedTableBody) {
-savedTableBody.innerHTML = `<tr><td colspan="2" class="no-data-message">Cargando redes guardadas...</td></tr>`;
-}
-
-//Guardar una red wifi
-fetch('/redesGuardadas')
-.then(res => res.json())
-.then(data => {
-const networks = data.networks || [];
-if (networks.length === 0) {
-if (savedTableBody) savedTableBody.innerHTML = '';
-if (noSavedMsg) noSavedMsg.style.display = 'block';
-} else {
-if (noSavedMsg) noSavedMsg.style.display = 'none';
-if (savedTableBody) savedTableBody.innerHTML = '';
-
-networks.forEach(net => {
-const tr = document.createElement('tr');
-tr.innerHTML = `
-<td>${net.ssid}</td>
-<td>
-<button class="action-button success-button" data-action="connect" data-ssid="${net.ssid}">Conectar</button>
-<button class="action-button info-button" data-action="update" data-ssid="${net.ssid}">Actualizar</button>
-<button class="action-button danger-button" data-action="delete" data-ssid="${net.ssid}">Eliminar</button>
-</td>
-`;
-savedTableBody.appendChild(tr);
+            if (response.ok) {
+                showRebootMessage();
+            } else {
+                throw new Error('Error al enviar comando de reinicio');
+            }
+        } catch (error) {
+            showError('Error al reiniciar:', error);
+        }
+    });
 });
 
-savedTableBody.querySelectorAll('button[data-action]').forEach(btn => {
-const action = btn.getAttribute('data-action');
-const ssid = btn.getAttribute('data-ssid');
-btn.onclick = function() {
-if (action === 'connect') {
-conectarRed(ssid);
-} else if (action === 'update') {
-showPasswordModal(ssid, true);
-} else if (action === 'delete') {
-if (confirm(`¿Eliminar la red "${ssid}"?`)) {
-fetch('/borrarRed', {
-method: 'POST',
-headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-body: `ssid=${encodeURIComponent(ssid)}`
-})
-.then(res => res.json())
-.then(data => {
-showToast('Red eliminada', 'success');
-obtenerRedesGuardadas();
-})
-.catch(() => showToast('Error al eliminar la red', 'error'));
-}
-}
-};
-});
-}
-})
-.catch(() => {
-if (savedTableBody) savedTableBody.innerHTML = `<tr><td colspan="2" class="no-data-message">Error al cargar redes guardadas</td></tr>`;
-if (noSavedMsg) noSavedMsg.style.display = 'none';
-});
-}
+setupButton('salir-programacion', () => {
+    showConfirmDialog('¿Estás seguro que deseas salir del modo de programación? Esto reiniciará el dispositivo en modo normal.', async () => {
+        try {
+            const response = await fetch(`${apiUrl}/exit-programming`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-function setupWifiSection() {
-const showAvailableBtn = $('showAvailableNetworksBtn');
-const showSavedBtn = $('showSavedNetworksBtn');
-const availableSection = $('availableNetworksSection');
-const savedSection = $('savedNetworksSection');
-const showAvailableListBtn = $('showAvailableNetworksListBtn');
-const availableTableBody = $('availableNetworksTableBody');
-const noAvailableMsg = $('noAvailableNetworks');
-const showSavedListBtn = $('showSavedNetworksListBtn');
-const clearAllSavedBtn = $('clearAllSavedNetworksBtn');
-
-showAvailableBtn.onclick = () => {
-showAvailableBtn.classList.add('active');
-showSavedBtn.classList.remove('active');
-availableSection.classList.add('active-content');
-savedSection.classList.remove('active-content');
-};
-
-showSavedBtn.onclick = () => {
-showSavedBtn.classList.add('active');
-showAvailableBtn.classList.remove('active');
-savedSection.classList.add('active-content');
-availableSection.classList.remove('active-content');
-};
-
-showAvailableListBtn.onclick = function() {
-availableTableBody.innerHTML = `<tr><td colspan="4" class="no-data-message">Buscando redes WiFi...</td></tr>`;
-noAvailableMsg.style.display = 'none';
-
-//Escaneo de las redes disponibles 
-fetch('/redesDisponibles')
-.then(res => res.json())
-.then(data => {
-const networks = data.networks || [];
-if (networks.length === 0) {
-availableTableBody.innerHTML = '';
-noAvailableMsg.style.display = 'block';
-} else {
-noAvailableMsg.style.display = 'none';
-availableTableBody.innerHTML = '';
-networks.forEach(net => {
-const tr = document.createElement('tr');
-tr.innerHTML = `
-<td>${net.ssid}</td>
-<td>${net.security}</td>
-<td>
-<span class="wifi-signal signal-${net.intensity}">
-${'&#9679;'.repeat(net.intensity)}
-</span>
-</td>
-<td>
-<button class="action-button success-button" data-ssid="${net.ssid}">Conectar</button>
-</td>
-`;
-availableTableBody.appendChild(tr);
+            if (response.ok) {
+                showExitProgrammingMessage();
+            } else {
+                throw new Error('Error al salir del modo programación');
+            }
+        } catch (error) {
+            showError('Error al salir del modo programación:', error);
+        }
+    });
 });
 
-availableTableBody.querySelectorAll('button[data-ssid]').forEach(btn => {
-btn.onclick = function() {
-const ssid = this.getAttribute('data-ssid');
-showPasswordModal(ssid, false);
-};
-});
-}
-})
-.catch(err => {
-availableTableBody.innerHTML = `<tr><td colspan="4" class="no-data-message">Error al buscar redes WiFi</td></tr>`;
-noAvailableMsg.style.display = 'none';
-showToast('Error al buscar redes WiFi', 'error');
-});
-};
+setupButton('cancelar-salir', () => showSection('inicio'));
 
-if (showSavedListBtn) showSavedListBtn.onclick = obtenerRedesGuardadas;
+// Con este nuevo código:
+setupButton('salir-reiniciar', () => {
+    showConfirmDialog('¿Estás seguro que deseas salir del modo de programación y reiniciar la tarjeta? Esto apagará el LED y reiniciará el dispositivo.', async () => {
+        try {
+            const response = await fetch(`${apiUrl}/exit-programming`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-if (clearAllSavedBtn) {
-clearAllSavedBtn.onclick = function() {
-if (confirm('¿Borrar todas las redes guardadas?')) {
-fetch('/borrarRedes')
-.then(res => res.json())
-.then(() => {
-showToast('Todas las redes guardadas eliminadas', 'success');
-obtenerRedesGuardadas();
-})
-.catch(() => showToast('Error al borrar redes guardadas', 'error'));
-}
-};
-}
-}
-
-// 6. Navegación y datos
-function setupNavigationYDatos() {
-const sidebar = $('perro_cinco');
-const menuToggle = $('perro_dos');
-const mainContent = $('perro_doce');
-const navLinks = document.querySelectorAll('#perro_siete ul li a');
-const pantallaSubmenu = $('pantallaSubmenu');
-const gpioSubmenu = $('gpioSubmenu');
-const pantallaSubmenuLinks = pantallaSubmenu.querySelectorAll('li a[data-subsection]');
-const gpioSubmenuLinks = gpioSubmenu.querySelectorAll('li a[data-subsection]');
-const FUNCIONES_SIDEBAR_WIDTH = 150;
-
-let submenuOverlay = document.getElementById('submenuOverlay');
-if (!submenuOverlay) {
-submenuOverlay = document.createElement('div');
-submenuOverlay.id = 'submenuOverlay';
-submenuOverlay.className = 'submenu-overlay';
-submenuOverlay.style.position = 'fixed';
-submenuOverlay.style.top = '0';
-submenuOverlay.style.left = '0';
-submenuOverlay.style.width = '100vw';
-submenuOverlay.style.height = '100vh';
-submenuOverlay.style.background = 'rgba(0,0,0,0.15)';
-submenuOverlay.style.zIndex = '100';
-submenuOverlay.style.display = 'none';
-document.body.appendChild(submenuOverlay);
-}
-
-function closeAllSubmenus() {
-sidebar.classList.remove('active');
-pantallaSubmenu.classList.remove('active');
-gpioSubmenu.classList.remove('active');
-mainContent.classList.remove('shifted');
-mainContent.style.marginLeft = '0';
-menuToggle.classList.remove('active');
-submenuOverlay.style.display = 'none';
-}
-
-menuToggle.onclick = () => {
-sidebar.classList.toggle('active');
-mainContent.classList.toggle('shifted');
-mainContent.style.marginLeft = sidebar.classList.contains('active') ? FUNCIONES_SIDEBAR_WIDTH + 'px' : '0';
-menuToggle.classList.toggle('active');
-if (sidebar.classList.contains('active')) {
-submenuOverlay.style.display = 'block';
-} else {
-closeAllSubmenus();
-}
-};
-
-submenuOverlay.onclick = closeAllSubmenus;
-submenuOverlay.addEventListener('touchstart', closeAllSubmenus);
-
-mainContent.addEventListener('click', function(e) {
-if (pantallaSubmenu.classList.contains('active') || gpioSubmenu.classList.contains('active')) {
-if (!pantallaSubmenu.contains(e.target) && !gpioSubmenu.contains(e.target) && !sidebar.contains(e.target)) {
-closeAllSubmenus();
-}
-}
+            if (response.ok) {
+                showExitProgrammingMessage();
+            } else {
+                throw new Error('Error al salir del modo programación');
+            }
+        } catch (error) {
+            showError('Error al salir del modo programación:', error);
+        }
+    });
 });
 
-navLinks.forEach(link => {
-link.onclick = e => {
-e.preventDefault();
-const sectionId = link.dataset.section;
+        setupButton('cancelar-salir', () => showSection('inicio'));
+    }
 
-if (sectionId === 'salir') {
-if (confirm('¿Estás seguro de que deseas salir? La placa se reiniciará.')) {
-fetch('/exit').then(() => fetch('/restart')).then(() => {
-showToast('Reiniciando placa...', 'info');
-setTimeout(() => location.reload(), 2000);
-}).catch(() => showToast('Error al reiniciar', 'error'));
-}
-return;
-}
+    function setupButton(id, handler) {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', handler);
+    }
 
-document.querySelectorAll('main section').forEach(section => {
-section.classList.remove('active-section');
-section.style.display = 'none';
-});
+    function validateConfigInput(id, channel) {
+        if (!/^[A-Za-z0-9]{1,3}$/.test(id)) {
+            showAlert('error', 'ID inválido. Solo letras y números, máximo 3 caracteres.');
+            return false;
+        }
 
-let targetSectionElement = null;
-if (sectionId === 'inicio') targetSectionElement = $('inicio-section');
-else if (sectionId === 'datos') targetSectionElement = $('datos-section');
-else if (sectionId === 'funciones') {
-pantallaSubmenu.classList.add('active');
-gpioSubmenu.classList.remove('active');
-submenuOverlay.style.display = 'block';
-render('pantalla');
-pantallaSubmenuLinks.forEach(l => l.classList.remove('active'));
-const pantallaLink = pantallaSubmenu.querySelector('a[data-subsection="pantalla"]');
-if (pantallaLink) pantallaLink.classList.add('active');
-$('funciones-content').classList.add('active-section');
-$('funciones-content').style.display = 'block';
-} else if (sectionId === 'gpio') {
-gpioSubmenu.classList.add('active');
-pantallaSubmenu.classList.remove('active');
-submenuOverlay.style.display = 'block';
-render('gpio');
-gpioSubmenuLinks.forEach(l => l.classList.remove('active'));
-const gpioLink = gpioSubmenu.querySelector('a[data-subsection="gpio"]');
-if (gpioLink) gpioLink.classList.add('active');
-$('funciones-content').classList.add('active-section');
-$('funciones-content').style.display = 'block';
-}
+        if (channel < 0 || channel > 8) {
+            showAlert('error', 'Canal inválido. Debe ser entre 0 y 8.');
+            return false;
+        }
 
-if (targetSectionElement) {
-targetSectionElement.classList.add('active-section');
-targetSectionElement.style.display = 'block';
-}
+        return true;
+    }
 
-navLinks.forEach(nl => nl.classList.remove('active'));
-link.classList.add('active');
+    function updateUIWithNewConfig(id, channel, wifiEnabled) {
+        document.getElementById('current-id').textContent = id;
+        document.getElementById('current-channel').textContent = channel;
+        document.getElementById('current-wifi').textContent = wifiEnabled ? 'Activado' : 'Desactivado';
+        currentConfig.id = id;
+        currentConfig.channel = channel;
+        currentConfig.WiFi = wifiEnabled;
+    }
 
-sidebar.classList.remove('active');
-mainContent.classList.remove('shifted');
-mainContent.style.marginLeft = '0';
-menuToggle.classList.remove('active');
-submenuOverlay.style.display = 'none';
-};
-});
+    function showRebootMessage() {
+        const salirSection = document.getElementById('salir-section');
+        if (salirSection) {
+            salirSection.innerHTML = `
+                <div class="funcion-container">
+                    <h2>Reiniciando tarjeta Heltec...</h2>
+                    <div class="reboot-message">
+                        <p>La tarjeta se está reiniciando. Por favor, espera unos segundos.</p>
+                        <div class="loading-spinner"></div>
+                        <p>La página se recargará automáticamente.</p>
+                    </div>
+                </div>
+            `;
+        }
 
-pantallaSubmenuLinks.forEach(link => {
-link.onclick = e => {
-e.preventDefault();
-pantallaSubmenuLinks.forEach(l => l.classList.remove('active'));
-link.classList.add('active');
-render(link.dataset.subsection);
-};
-});
+        // Intentar recargar después de 10 segundos
+        setTimeout(() => {
+            window.location.reload();
+        }, 10000);
+    }
 
-gpioSubmenuLinks.forEach(link => {
-link.onclick = e => {
-e.preventDefault();
-gpioSubmenuLinks.forEach(l => l.classList.remove('active'));
-link.classList.add('active');
-render(link.dataset.subsection);
-};
-});
+    function showExitProgrammingMessage() {
+        const salirSection = document.getElementById('salir-section');
+        if (salirSection) {
+            salirSection.innerHTML = `
+                <div class="funcion-container">
+                    <h2>Saliendo del modo programación...</h2>
+                    <div class="reboot-message">
+                        <p>El dispositivo se está reiniciando en modo normal.</p>
+                        <div class="loading-spinner"></div>
+                        <p>La conexión se cerrará automáticamente.</p>
+                    </div>
+                </div>
+            `;
+        }
 
-const idInput = $('idDispositivo');
-const canalInput = $('canalLoRa');
-const guardarBtn = $('guardarDatos');
-const resetBtn = $('restablecerDatos');
-const status = $('datosStatus');
+        // Intentar recargar después de 10 segundos
+        setTimeout(() => {
+            window.location.href = 'http://' + window.location.hostname;
+        }, 10000);
+    }
 
-idInput.value = sistema.datos.id || '';
-canalInput.value = sistema.datos.canal || '';
+    // WiFi Management Functions
+    function initWiFiSection() {
+        // Control WiFi
+        setupButton('activar-wifi', () => sendWiFiCommand('1'));
+        setupButton('apagar-wifi', () => sendWiFiCommand('0'));
 
-idInput.addEventListener('input', function() {
-this.value = this.value.replace(/[^a-zA-Z0-9_]/g, '').replace(/ñ/gi, '');
-});
+        // Escaneo WiFi
+        setupButton('scan-wifi', scanWiFiNetworks);
+        setupButton('refresh-wifi', scanWiFiNetworks);
 
-canalInput.addEventListener('input', function() {
-this.value = this.value.replace(/[^0-8]/g, '');
-if (this.value > 8) this.value = 8;
-});
+        // Redes guardadas
+        setupButton('show-saved', showSavedNetworks);
+        setupButton('remove-all-wifi', removeAllNetworks);
+    }
 
-if (guardarBtn) {
-guardarBtn.onclick = () => {
-const id = idInput.value.trim();
-const canal = canalInput.value.trim();
-const idValido = /^[a-zA-Z0-9_]+$/.test(id) && !/[ñÑ]/.test(id);
-const canalValido = /^[0-8]$/.test(canal);
+    async function sendWiFiCommand(state) {
+        try {
+            const response = await fetch(`${apiUrl}/wifi`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state })
+            });
+            const data = await response.json();
 
-if (id && canal && idValido && canalValido) {
-sistema.datos.id = id;
-sistema.datos.canal = canal;
-status.textContent = 'Datos guardados exitosamente.';
-status.style.color = '#2ecc71';
-showToast('Datos guardados exitosamente!', 'success');
-guardarEstado();
-actualizarResumenInicio();
-} else {
-showToast(!idValido ? 'Error: El ID contiene caracteres no permitidos (ñ o especiales).' :
-!canalValido ? 'Error: El Canal debe ser un número entre 0 y 8.' :
-'Error: ID y Canal son obligatorios.', 'error');
-status.textContent = 'Error en los datos ingresados.';
-status.style.color = '#e74c3c';
-}
-};
-}
+            if (data.success) {
+                showAlert('success', `WiFi ${state === '1' ? 'activado' : 'desactivado'} correctamente`);
+                currentConfig.WiFi = (state === '1');
+                document.getElementById('current-wifi').textContent = currentConfig.WiFi ? 'Activado' : 'Desactivado';
+                updateButtonStates();
+            } else {
+                throw new Error(data.message || 'Error desconocido');
+            }
+        } catch (error) {
+            showError('Error al controlar WiFi:', error);
+        }
+    }
 
-if (resetBtn) {
-resetBtn.onclick = () => {
-idInput.value = '';
-canalInput.value = '';
-sistema.datos.id = '';
-sistema.datos.canal = '';
-status.textContent = '';
-showToast('Datos restablecidos.', 'info');
-guardarEstado();
-actualizarResumenInicio();
-};
-}
-}
+    function scanWiFiNetworks() {
+        const wifiTable = document.getElementById('wifi-table');
+        wifiTable.innerHTML = '<tr><td colspan="4" class="loading">Escaneando redes WiFi...</td></tr>';
 
-// Inicialización
-cargarEstado();
-setupNavigationYDatos();
-render('inicio');
-const initialSectionLink = document.querySelector('#perro_siete ul li a[data-section="inicio"]');
-if (initialSectionLink) initialSectionLink.click();
+        fetch(`${apiUrl}/wifi/scan`)
+            .then(response => {
+                if (!response.ok) throw new Error('Error en la respuesta del servidor');
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    wifiTable.innerHTML = `<tr><td colspan="4" class="error">${data.error}</td></tr>`;
+                } else if (data.redes && data.redes.length > 0) {
+                    renderWiFiTable(data.redes);
+                } else {
+                    wifiTable.innerHTML = '<tr><td colspan="4">No se encontraron redes WiFi</td></tr>';
+                }
+            })
+            .catch(error => {
+                wifiTable.innerHTML = `<tr><td colspan="4" class="error">Error: ${error.message}</td></tr>`;
+            });
+    }
+
+    function renderWiFiTable(networks) {
+        const wifiTable = document.getElementById('wifi-table');
+        wifiTable.innerHTML = `
+            <tr>
+                <th>SSID</th>
+                <th>Seguridad</th>
+                <th>Señal</th>
+                <th>Acción</th>
+            </tr>
+        `;
+
+        networks.forEach(network => {
+            const row = document.createElement('tr');
+            const strength = getStrengthLevel(network.rssi);
+            const securityColor = getSecurityColor(network.encryptionType);
+
+            row.innerHTML = `
+                <td>${network.ssid || 'Oculta'}</td>
+                <td style="color: ${securityColor}">${network.encryption}</td>
+                <td>
+                    <div class="signal-strength">
+                        <div class="signal-bar ${strength > 0 ? 'active' : ''}"></div>
+                        <div class="signal-bar ${strength > 1 ? 'active' : ''}"></div>
+                        <div class="signal-bar ${strength > 2 ? 'active' : ''}"></div>
+                        <div class="signal-bar ${strength > 3 ? 'active' : ''}"></div>
+                    </div>
+                </td>
+                <td>
+                    <button class="connect-btn" data-ssid="${network.ssid || ''}" data-encryption="${network.encryptionType}">
+                        Conectar
+                    </button>
+                </td>
+            `;
+            wifiTable.appendChild(row);
+        });
+
+        // Agregar event listeners a los botones de conexión
+        document.querySelectorAll('.connect-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const ssid = this.getAttribute('data-ssid');
+                const encryption = this.getAttribute('data-encryption');
+                showPasswordDialog(ssid, encryption);
+            });
+        });
+    }
+
+    function getStrengthLevel(rssi) {
+        if (rssi >= -50) return 4; // Excelente
+        if (rssi >= -60) return 3; // Bueno
+        if (rssi >= -70) return 2; // Regular
+        if (rssi >= -80) return 1; // Débil
+        return 0; // Muy débil
+    }
+
+    function getSecurityColor(encryptionType) {
+        if (encryptionType === 0) return '#2ecc71'; // Abierta (verde)
+        if (encryptionType === 1) return '#f39c12'; // WEP (naranja)
+        return '#e74c3c'; // WPA/WPA2 (rojo)
+    }
+
+    function showPasswordDialog(ssid, encryptionType) {
+        const dialog = document.createElement('div');
+        dialog.className = 'password-dialog';
+        dialog.innerHTML = `
+            <div class="dialog-content">
+                <h3>Conectar a "${ssid}"</h3>
+                ${encryptionType > 0 ? `
+                    <input type="password" id="wifi-password" placeholder="Contraseña WiFi" required>
+                ` : '<p>Red abierta (sin contraseña)</p>'}
+                <div class="dialog-buttons">
+                    <button id="cancel-wifi">Cancelar</button>
+                    <button id="confirm-wifi">Conectar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(dialog);
+
+        document.getElementById('cancel-wifi').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+        });
+
+        document.getElementById('confirm-wifi').addEventListener('click', () => {
+            const password = encryptionType > 0 ?
+                document.getElementById('wifi-password').value : '';
+
+            if (encryptionType > 0 && !password) {
+                showAlert('error', 'Por favor ingresa la contraseña');
+                return;
+            }
+
+            connectToWiFi(ssid, password, encryptionType);
+            document.body.removeChild(dialog);
+        });
+    }
+
+    async function connectToWiFi(ssid, password, encryptionType) {
+        try {
+            showAlert('info', `Conectando a ${ssid}...`);
+
+            const response = await fetch(`${apiUrl}/wifi/connect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ssid, password, encryptionType })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', `Conectado a ${ssid} correctamente`);
+                // Actualizar la lista de redes guardadas
+                showSavedNetworks();
+            } else {
+                throw new Error(data.message || 'Error al conectar');
+            }
+        } catch (error) {
+            showError('Error al conectar a WiFi:', error);
+        }
+    }
+
+    async function showSavedNetworks() {
+        const savedNetworksContainer = document.getElementById('saved-networks');
+        savedNetworksContainer.innerHTML = '<p class="loading">Cargando redes guardadas...</p>';
+
+        try {
+            const response = await fetch(`${apiUrl}/wifi/saved`);
+            const data = await response.json();
+
+            if (data.error) {
+                savedNetworksContainer.innerHTML = `<p class="error">${data.error}</p>`;
+            } else if (data.networks && data.networks.length > 0) {
+                renderSavedNetworks(data.networks);
+            } else {
+                savedNetworksContainer.innerHTML = '<p>No hay redes guardadas</p>';
+            }
+        } catch (error) {
+            savedNetworksContainer.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+    }
+
+    function renderSavedNetworks(networks) {
+        const savedNetworksContainer = document.getElementById('saved-networks');
+        const list = document.createElement('ul');
+        list.className = 'saved-networks-list';
+
+        networks.forEach(network => {
+            const item = document.createElement('li');
+            item.innerHTML = `
+                <span>${network.ssid}</span>
+                <button class="remove-wifi" data-ssid="${network.ssid}">Eliminar</button>
+            `;
+            list.appendChild(item);
+        });
+
+        savedNetworksContainer.innerHTML = '';
+        savedNetworksContainer.appendChild(list);
+
+        // Agregar event listeners a los botones de eliminar
+        document.querySelectorAll('.remove-wifi').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const ssid = this.getAttribute('data-ssid');
+                removeNetwork(ssid);
+            });
+        });
+    }
+
+    async function removeNetwork(ssid) {
+        showConfirmDialog(`¿Eliminar la red "${ssid}" de las guardadas?`, async () => {
+            try {
+                const response = await fetch(`${apiUrl}/wifi/remove`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ssid })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', `Red "${ssid}" eliminada correctamente`);
+                    showSavedNetworks();
+                } else {
+                    throw new Error(data.message || 'Error al eliminar');
+                }
+            } catch (error) {
+                showError('Error al eliminar red:', error);
+            }
+        });
+    }
+
+    async function removeAllNetworks() {
+        showConfirmDialog('¿Eliminar TODAS las redes guardadas?', async () => {
+            try {
+                const response = await fetch(`${apiUrl}/wifi/remove-all`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', 'Todas las redes eliminadas correctamente');
+                    showSavedNetworks();
+                } else {
+                    throw new Error(data.message || 'Error al eliminar');
+                }
+            } catch (error) {
+                showError('Error al eliminar redes:', error);
+            }
+        });
+    }
+
+    // Funciones para otras secciones
+    async function sendDisplayCommand(state) {
+        try {
+            const response = await fetch(`${apiUrl}/display`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', `Pantalla ${state === '1' ? 'activada' : 'apagada'}`);
+                currentConfig.displayOn = (state === '1');
+                updateButtonStates();
+            } else {
+                throw new Error(data.message || 'Error desconocido');
+            }
+        } catch (error) {
+            showError('Error al controlar pantalla:', error);
+        }
+    }
+
+    async function sendDisplayTestCommand(id) {
+        try {
+            const response = await fetch(`${apiUrl}/display/test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', 'Prueba de pantalla iniciada');
+            } else {
+                throw new Error(data.message || 'Error desconocido');
+            }
+        } catch (error) {
+            showError('Error al probar pantalla:', error);
+        }
+    }
+
+    async function sendUartCommand(state) {
+        try {
+            const response = await fetch(`${apiUrl}/uart`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', `UART ${state === '1' ? 'activado' : 'desactivado'}`);
+                currentConfig.UART = (state === '1');
+                updateButtonStates();
+            } else {
+                throw new Error(data.message || 'Error desconocido');
+            }
+        } catch (error) {
+            showError('Error al controlar UART:', error);
+        }
+    }
+
+    async function scanI2CDevices() {
+        i2cDevicesList.innerHTML = '<li class="loading">Buscando dispositivos I2C...</li>';
+
+        try {
+            const response = await fetch(`${apiUrl}/i2c/scan`);
+            const data = await response.json();
+
+            if (data.error) {
+                i2cDevicesList.innerHTML = `<li class="error">${data.error}</li>`;
+            } else if (data.devices && data.devices.length > 0) {
+                renderI2CDevices(data.devices);
+            } else {
+                i2cDevicesList.innerHTML = '<li class="no-devices">No se encontraron dispositivos I2C</li>';
+            }
+
+            currentConfig.I2C = true;
+            updateButtonStates();
+        } catch (error) {
+            i2cDevicesList.innerHTML = `<li class="error">Error: ${error.message}</li>`;
+        }
+    }
+
+    function renderI2CDevices(devices) {
+        i2cDevicesList.innerHTML = '';
+
+        devices.forEach(device => {
+            const item = document.createElement('li');
+            item.className = 'device-item';
+            item.innerHTML = `
+                <span class="device-address">0x${device.address.toString(16)}</span>
+                <span class="device-type">${device.type || 'Desconocido'}</span>
+            `;
+            i2cDevicesList.appendChild(item);
+        });
+    }
+
+    async function sendI2CCommand(state) {
+        try {
+            const response = await fetch(`${apiUrl}/i2c`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', `I2C ${state === '1' ? 'activado' : 'desactivado'}`);
+                currentConfig.I2C = (state === '1');
+                updateButtonStates();
+
+                if (state === '0') {
+                    i2cDevicesList.innerHTML = '<li class="no-devices">I2C desactivado</li>';
+                }
+            } else {
+                throw new Error(data.message || 'Error desconocido');
+            }
+        } catch (error) {
+            showError('Error al controlar I2C:', error);
+        }
+    }
+
+    // Funciones de utilidad
+    function showAlert(type, message) {
+        const alert = document.createElement('div');
+        alert.className = `alert ${type}`;
+        alert.textContent = message;
+        document.body.appendChild(alert);
+
+        setTimeout(() => {
+            alert.style.opacity = '0';
+            setTimeout(() => document.body.removeChild(alert), 300);
+        }, 3000);
+    }
+
+    function showError(context, error) {
+        console.error(context, error);
+        showAlert('error', `${context} ${error.message}`);
+    }
+
+    function showConfirmDialog(message, confirmCallback) {
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        dialog.innerHTML = `
+            <div class="dialog-content">
+                <h3>Confirmar</h3>
+                <p>${message}</p>
+                <div class="dialog-buttons">
+                    <button id="cancel-action">Cancelar</button>
+                    <button id="confirm-action">Confirmar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(dialog);
+
+        document.getElementById('cancel-action').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+        });
+
+        document.getElementById('confirm-action').addEventListener('click', () => {
+            confirmCallback();
+            document.body.removeChild(dialog);
+        });
+    }
 });

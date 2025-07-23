@@ -12,12 +12,27 @@
   };
 
   void endpointsMProg(void *pvParameters);
+  //De define para el manejo del modo programacion por boton fisico
+void modoprogporbotonfisico();
+void servidorModoProgramacion();
+void iniciarServidorConfiguracion(void *pvParameters);
+void configurarServidorAPI();
+void mostrarMensaje(const String& titulo, const String& mensaje, int delayMs);
+void configurarDisplay(bool estado);
 
- void tareaDetectarModoProgramacion(void *pvParameters);
 
+// Declaraciones de funciones API REST
+void apiObtenerConfiguracion();
+void apiGuardarConfiguracion();
+void apiEjecutarComando();
+void apiBuscarDispositivos();
+void apiObtenerEstado();
+void apiIntercambiarDatos();
 
-void addOrUpdateNetwork(const String& ssid, const String& password);
-void deleteNetwork(const String& ssid);
-void clearNetworks();
-void setPreferredNetwork(const String& ssid);
+// Función para registrar todos los endpoints en el servidor
+void registrarEndpointsAPI();
+
+// Función auxiliar para obtener el tipo de encriptación como String
+String getEncryptionType(wifi_auth_mode_t encryptionType);
+
 #endif

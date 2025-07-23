@@ -3,9 +3,9 @@
 #include "config.h"
 #include "eeprom.h"
 
-
-
 bool displayActivo = true; // Initialize display as active by default
+
+#define VERSION_FIRMWARE "3.1.1.1"
 
 void inicializarPantalla() {
   Heltec.display->init();
@@ -47,7 +47,7 @@ void mostrarEstadoLoRa(const String& idNodo, const String& canal, const String& 
 }
 
 void mostrarMensajeRecibido(const String& origen, const String& mensaje) {
-  if (displayActivo) { // Only update if active
+  if (displayActivo) {
     Heltec.display->clear();
     Heltec.display->drawString(0, 0, "MSG Recibido!");
     Heltec.display->drawString(0, 15, "De: " + origen);
@@ -57,16 +57,16 @@ void mostrarMensajeRecibido(const String& origen, const String& mensaje) {
     }
     Heltec.display->drawString(0, 30, "Msg: " + msgDisplay);
     Heltec.display->display();
-    // También imprimir por Serial
     Serial.println("[DISPLAY] MSG Recibido!");
     Serial.println("[DISPLAY] De: " + origen);
     Serial.println("[DISPLAY] Msg: " + mensaje);
-    delay(3000);
+    vTaskDelay(10000 / portTICK_PERIOD_MS); // Mostrar por 5 segundos
+    mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), VERSION_FIRMWARE);
   }
 }
 
 void mostrarMensajeEnviado(const String& destino, const String& mensaje) {
-  if (displayActivo) { // Only update if active
+  if (displayActivo) {
     Heltec.display->clear();
     Heltec.display->drawString(0, 0, "MSG Enviado!");
     Heltec.display->drawString(0, 15, "A: " + destino);
@@ -76,11 +76,11 @@ void mostrarMensajeEnviado(const String& destino, const String& mensaje) {
     }
     Heltec.display->drawString(0, 30, "Msg: " + msgDisplay);
     Heltec.display->display();
-    // También imprimir por Serial
     Serial.println("[DISPLAY] MSG Enviado!");
     Serial.println("[DISPLAY] A: " + destino);
     Serial.println("[DISPLAY] Msg: " + mensaje);
-    delay(2000);
+    vTaskDelay(10000 / portTICK_PERIOD_MS); // Mostrar por 5 segundos
+    mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), VERSION_FIRMWARE);
   }
 }
 
