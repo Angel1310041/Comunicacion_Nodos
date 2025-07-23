@@ -9,7 +9,7 @@
 #include "hardware.h"
 
 SX1262 lora = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
-String Version = "3.1.1.2";
+String Version = "3.2.1.1";
 volatile bool receivedFlag = false;
 bool modoProgramacion = false;
 
@@ -79,7 +79,7 @@ void enviarComandoEstructurado(const String& destino, char red, const String& co
     int numAzar = random(10, 99);
     String msg = destino + "@" + red + "@" + comando + "@" + String(numAzar);
 
-    if (strcmp(destino.c_str(), configLora.IDLora) != 0 && comando.length() > 0) {
+    if (comando.length() > 0 && strcmp(destino.c_str(), configLora.IDLora) != 0) { 
         String siguienteHop = destino, msgID = generarMsgID();
         char paquete[256];
         snprintf(paquete, sizeof(paquete), "ORIG:%s|DEST:%s|MSG:%s|HOP:%s|CANAL:%d|ID:%s",
@@ -87,20 +87,19 @@ void enviarComandoEstructurado(const String& destino, char red, const String& co
         imprimirSerial("Enviando comando estructurado a HOP:" + siguienteHop + " por canal " + String(configLora.Canal), 'c');
         mostrarMensaje("Enviando...", "A HOP: " + siguienteHop, 0);
         lora.standby();
-        mostrarMensajeEnviado(destino, msg); // <-- MUESTRA ANTES DE ENVIAR
-int resultado = lora.transmit(paquete);
-if (resultado == RADIOLIB_ERR_NONE) {
-    imprimirSerial("Comando enviado correctamente.", 'g');
-    Hardware::manejarComandoPorFuente("lora");
-    guardarMsgID(msgID);
-    // NO LLAMES mostrarMensajeEnviado aquí otra vez
-} else {
-    imprimirSerial("Error al enviar: " + String(resultado), 'r');
-    mostrarError("Error al enviar: " + String(resultado));
-}
+        mostrarMensajeEnviado(destino, msg); 
+        int resultado = lora.transmit(paquete);
+        if (resultado == RADIOLIB_ERR_NONE) {
+            imprimirSerial("Comando enviado correctamente.", 'g');
+            Hardware::manejarComandoPorFuente("lora");
+            guardarMsgID(msgID);
+        } else {
+            imprimirSerial("Error al enviar: " + String(resultado), 'r');
+            mostrarError("Error al enviar: " + String(resultado));
+        }
         lora.startReceive();
     } else {
-        imprimirSerial("Destino inválido o comando vacío.", 'y');
+        imprimirSerial("Destino inválido (igual al propio ID) o comando vacío.", 'y');
         mostrarInfo("Destino invalido o comando vacio.");
     }
 }
@@ -124,10 +123,18 @@ void recibirComandoSerial(void *pvParameters) {
                 String destino = comandoSerial.substring(0, idx1);
                 char red = comandoSerial.charAt(idx1 + 1);
                 String comando = comandoSerial.substring(idx2 + 1, idx3);
-                enviarComandoEstructurado(destino, red, comando);
-                ManejoComunicacion::procesarComando(comandoSerial, respuesta);
-                if (!respuesta.isEmpty()) {
-                    imprimirSerial("Respuesta: " + respuesta, 'g');
+
+                if (strcmp(destino.c_str(), configLora.IDLora) == 0 || strcmp(destino.c_str(), "000") == 0) {
+                    imprimirSerial("Procesando comando serial localmente (destino: " + destino + ").", 'g');
+                    ManejoComunicacion::procesarComando(comandoSerial, respuesta);
+                    if (!respuesta.isEmpty()) {
+                        imprimirSerial("Respuesta local: " + respuesta, 'g');
+                    }
+                    if (strcmp(destino.c_str(), "000") == 0) {
+                        enviarComandoEstructurado(destino, red, comando);
+                    }
+                } else {
+                    enviarComandoEstructurado(destino, red, comando);
                 }
             } else {
                 imprimirSerial("Formato inválido. Usa: ID@R@CMD@##", 'r');
@@ -149,41 +156,58 @@ void recibirComandosLoRa(void *pvParameters) {
     while (true) {
         if (receivedFlag) {
             receivedFlag = false;
-            int state = lora.readData(msg);
+            int state = lora.readData(msg); 
             Hardware::manejarComandoPorFuente("lora");
             if (state == RADIOLIB_ERR_NONE) {
-                imprimirSerial("Comando recibido por LoRa: " + msg, 'c');
-                int idxMsg = msg.indexOf("MSG:");
-                int idxPipe = msg.indexOf("|", idxMsg);
-                if (idxMsg != -1) {
-                    String comandoRecibido;
-                    String respuesta;
-                    if (idxPipe != -1)
-                        comandoRecibido = msg.substring(idxMsg + 4, idxPipe);
-                    else
-                        comandoRecibido = msg.substring(idxMsg + 4);
-                    comandoRecibido.trim();
-                    int idx1 = comandoRecibido.indexOf('@');
-                    int idx2 = comandoRecibido.indexOf('@', idx1 + 1);
-                    int idx3 = comandoRecibido.indexOf('@', idx2 + 1);
-                    if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
-                        // Extraer el origen del mensaje
-                        String origen = "";
-                        int idxOrig = msg.indexOf("ORIG:");
-                        int idxPipeOrig = msg.indexOf("|", idxOrig);
-                        if (idxOrig != -1 && idxPipeOrig != -1) {
-                            origen = msg.substring(idxOrig + 5, idxPipeOrig);
-                        }
-                        mostrarMensajeRecibido(origen, comandoRecibido); // <--- Aquí
+                imprimirSerial("Paquete LoRa recibido: " + msg, 'c');
+                
+                String destinoRecibido = "";
+                int idxDest = msg.indexOf("DEST:");
+                int idxPipeDest = msg.indexOf("|", idxDest);
+                if (idxDest != -1 && idxPipeDest != -1) {
+                    destinoRecibido = msg.substring(idxDest + 5, idxPipeDest);
+                    destinoRecibido.trim();
+                }
 
-                        ManejoComunicacion::procesarComando(comandoRecibido, respuesta);
-                        ultimoComandoRecibido = comandoRecibido;
+                if (strcmp(destinoRecibido.c_str(), configLora.IDLora) == 0 || strcmp(destinoRecibido.c_str(), "000") == 0) {
+                    imprimirSerial("Comando LoRa procesado (destino: " + destinoRecibido + ").", 'g');
+                    
+                    int idxMsg = msg.indexOf("MSG:");
+                    int idxPipe = msg.indexOf("|", idxMsg);
+                    if (idxMsg != -1) {
+                        String comandoRecibido;
+                        String respuesta;
+                        if (idxPipe != -1)
+                            comandoRecibido = msg.substring(idxMsg + 4, idxPipe);
+                        else
+                            comandoRecibido = msg.substring(idxMsg + 4);
+                        comandoRecibido.trim();
+                        int idx1 = comandoRecibido.indexOf('@');
+                        int idx2 = comandoRecibido.indexOf('@', idx1 + 1);
+                        int idx3 = comandoRecibido.indexOf('@', idx2 + 1);
+                        
+                        if (idx1 > 0 && idx2 > idx1 && idx3 > idx2) {
+                            String origen = ""; 
+                            int idxOrig = msg.indexOf("ORIG:");
+                            int idxPipeOrig = msg.indexOf("|", idxOrig);
+                            if (idxOrig != -1 && idxPipeOrig != -1) {
+                                origen = msg.substring(idxOrig + 5, idxPipeOrig);
+                            }
+                            mostrarMensajeRecibido(origen, comandoRecibido); 
+                            ManejoComunicacion::procesarComando(comandoRecibido, respuesta); 
+                            ultimoComandoRecibido = comandoRecibido;
+                        } else {
+                            imprimirSerial("Mensaje LoRa recibido no es un comando válido: " + comandoRecibido, 'y');
+                        }
                     } else {
-                        imprimirSerial("Mensaje LoRa recibido no es un comando válido: " + comandoRecibido, 'y');
+                        imprimirSerial("Paquete LoRa recibido sin campo MSG: " + msg, 'y');
                     }
                 } else {
-                    imprimirSerial("Paquete LoRa recibido sin campo MSG: " + msg, 'y');
+                    imprimirSerial("Paquete LoRa para otro destino (" + destinoRecibido + "), ignorando.", 'y');
                 }
+            } else {
+                imprimirSerial("Error al recibir LoRa: " + String(state), 'r');
+                mostrarError("Error al recibir LoRa: " + String(state));
             }
             lora.startReceive();
             mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), Version);
