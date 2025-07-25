@@ -9,30 +9,15 @@
   class Interfaz {
     public:
       static void entrarModoProgramacion();
+      static void salirModoProgramacion();
   };
 
   void endpointsMProg(void *pvParameters);
-  //De define para el manejo del modo programacion por boton fisico
-void modoprogporbotonfisico();
-void servidorModoProgramacion();
-void iniciarServidorConfiguracion(void *pvParameters);
-void configurarServidorAPI();
-void mostrarMensaje(const String& titulo, const String& mensaje, int delayMs);
-void configurarDisplay(bool estado);
 
-
-// Declaraciones de funciones API REST
-void apiObtenerConfiguracion();
-void apiGuardarConfiguracion();
-void apiEjecutarComando();
-void apiBuscarDispositivos();
-void apiObtenerEstado();
-void apiIntercambiarDatos();
-
-// Función para registrar todos los endpoints en el servidor
-void registrarEndpointsAPI();
-
-// Función auxiliar para obtener el tipo de encriptación como String
-String getEncryptionType(wifi_auth_mode_t encryptionType);
-
+//Se añadio esto
+  void modoprogporbotonfisico();
+  void servidorModoProgramacion();
+  void mostrarMensaje(const String& titulo, const String& mensaje, int delayMs);
+  void configurarDisplay(bool estado);
+  String getEncryptionType(wifi_auth_mode_t encryptionType);
 #endif

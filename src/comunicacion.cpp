@@ -42,7 +42,6 @@ void parpadearLEDStatus(int veces, int periodo_ms) {
 }
 
 void manejarCodigoRF(unsigned long value) {
-    // Parpadea el LED_STATUS 3 veces (600 ms total, 200 ms por ciclo)
     parpadearLEDStatus(3, 200);
 
     if (value == 7969128) {
@@ -203,28 +202,183 @@ void ManejoComunicacion::envioMsjLoRa(String comandoLoRa) {
 }
 
 void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &respuesta) {
-    esp_task_wdt_reset();
-    int primerSep = comandoRecibido.indexOf('@');
-    int segundoSep = comandoRecibido.indexOf('@', primerSep + 1);
-    int tercerSep = comandoRecibido.indexOf('@', segundoSep + 1);
-    String IDLora = comandoRecibido.substring(0, primerSep);
-    String destino = comandoRecibido.substring(primerSep + 1, segundoSep);
-    String comandoProcesar = comandoRecibido.substring(segundoSep + 1, tercerSep);
-    String prefix1 = "";
-    String accion = "";
+ // --- Comando para activar IO2/IO3 por tiempo ---
+    if (comandoRecibido.startsWith("ACTIVAR:")) {
+        String resto = comandoRecibido.substring(8);
+        int comaIdx = resto.indexOf(',');
+        if (comaIdx == -1) {
+            respuesta = "Formato inválido. Usa: ACTIVAR:IO2,2m";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
+        String pinStr = resto.substring(0, comaIdx);
+        String tiempoStr = resto.substring(comaIdx + 1);
+        int idx = -1;
+        if (pinStr.equalsIgnoreCase("IO2")) idx = 0;
+        else if (pinStr.equalsIgnoreCase("IO3")) idx = 1;
+        else {
+            respuesta = "Pin no soportado. Solo IO2 o IO3";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
 
-    respuesta = ""; 
-    if (comandoRecibido == "") {
+        // Parsear tiempo
+        tiempoStr.trim();
+        int tiempoValor = 0;
+        char unidad = 's';
+        if (tiempoStr.endsWith("m") || tiempoStr.endsWith("M")) {
+            unidad = 'm';
+            tiempoValor = tiempoStr.substring(0, tiempoStr.length() - 1).toInt();
+        } else if (tiempoStr.endsWith("s") || tiempoStr.endsWith("S")) {
+            unidad = 's';
+            tiempoValor = tiempoStr.substring(0, tiempoStr.length() - 1).toInt();
+        } else {
+            tiempoValor = tiempoStr.toInt();
+        }
+        if (tiempoValor <= 0) {
+            respuesta = "Tiempo inválido. Usa ACTIVAR:IO2,2m o ACTIVAR:IO3,30s";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
+        int tiempoMs = (unidad == 'm') ? tiempoValor * 60000 : tiempoValor * 1000;
+
+        // Cancelar timer previo si existe
+        if (activaciones[idx].timer != NULL) {
+            xTimerStop(activaciones[idx].timer, 0);
+            xTimerDelete(activaciones[idx].timer, 0);
+            activaciones[idx].timer = NULL;
+        }
+
+        // Activar pin y crear timer
+        pinMode(activaciones[idx].pin, OUTPUT);
+        digitalWrite(activaciones[idx].pin, HIGH);
+        activaciones[idx].activo = true;
+        activaciones[idx].tiempoDesactivacion = tiempoMs;
+        activaciones[idx].timer = xTimerCreate(
+            ("TimerIO" + String(idx+2)).c_str(),
+            pdMS_TO_TICKS(tiempoMs),
+            pdFALSE,
+            (void*)0,
+            desactivarPinCallback
+        );
+        if (activaciones[idx].timer != NULL) {
+            xTimerStart(activaciones[idx].timer, 0);
+            respuesta = "Pin " + pinStr + " activado por " + String(tiempoValor) + ((unidad == 'm') ? " minutos" : " segundos");
+            imprimirSerial(respuesta, 'g');
+        } else {
+            respuesta = "Error al crear timer para " + pinStr;
+            imprimirSerial(respuesta, 'r');
+        }
+        return;
+    }
+
+    // --- Comando para desactivar IO2/IO3 por tiempo ---
+    if (comandoRecibido.startsWith("DESACTIVAR:")) {
+        String resto = comandoRecibido.substring(11);
+        int comaIdx = resto.indexOf(',');
+        if (comaIdx == -1) {
+            respuesta = "Formato inválido. Usa: DESACTIVAR:IO2,1m";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
+        String pinStr = resto.substring(0, comaIdx);
+        String tiempoStr = resto.substring(comaIdx + 1);
+        int idx = -1;
+        if (pinStr.equalsIgnoreCase("IO2")) idx = 0;
+        else if (pinStr.equalsIgnoreCase("IO3")) idx = 1;
+        else {
+            respuesta = "Pin no soportado. Solo IO2 o IO3";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
+
+        // Parsear tiempo
+        tiempoStr.trim();
+        int tiempoValor = 0;
+        char unidad = 's';
+        if (tiempoStr.endsWith("m") || tiempoStr.endsWith("M")) {
+            unidad = 'm';
+            tiempoValor = tiempoStr.substring(0, tiempoStr.length() - 1).toInt();
+        } else if (tiempoStr.endsWith("s") || tiempoStr.endsWith("S")) {
+            unidad = 's';
+            tiempoValor = tiempoStr.substring(0, tiempoStr.length() - 1).toInt();
+        } else {
+            tiempoValor = tiempoStr.toInt();
+        }
+        if (tiempoValor <= 0) {
+            respuesta = "Tiempo inválido. Usa DESACTIVAR:IO2,1m o DESACTIVAR:IO3,10s";
+            imprimirSerial(respuesta, 'r');
+            return;
+        }
+        int tiempoMs = (unidad == 'm') ? tiempoValor * 60000 : tiempoValor * 1000;
+
+        // Cancelar timer previo si existe
+        if (activaciones[idx].timer != NULL) {
+            xTimerStop(activaciones[idx].timer, 0);
+            xTimerDelete(activaciones[idx].timer, 0);
+            activaciones[idx].timer = NULL;
+        }
+
+        // Desactivar pin y crear timer para volver a activar después del tiempo
+        pinMode(activaciones[idx].pin, OUTPUT);
+        digitalWrite(activaciones[idx].pin, LOW);
+        activaciones[idx].activo = false;
+        activaciones[idx].tiempoDesactivacion = tiempoMs;
+        activaciones[idx].timer = xTimerCreate(
+            ("TimerIO" + String(idx+2)).c_str(),
+            pdMS_TO_TICKS(tiempoMs),
+            pdFALSE,
+            (void*)0,
+            activarPinCallback
+        );
+        if (activaciones[idx].timer != NULL) {
+            xTimerStart(activaciones[idx].timer, 0);
+            respuesta = "Pin " + pinStr + " desactivado por " + String(tiempoValor) + ((unidad == 'm') ? " minutos" : " segundos");
+            imprimirSerial(respuesta, 'y');
+        } else {
+            respuesta = "Error al crear timer para " + pinStr;
+            imprimirSerial(respuesta, 'r');
+        }
+        return;
+    }
+
+    esp_task_wdt_reset();
+
+    if (comandoRecibido.isEmpty()) { 
         respuesta = "Comando vacio";
+        imprimirSerial(respuesta, 'r');
         return;
     } else if (comandoRecibido == ultimoComandoRecibido) {
         imprimirSerial("Comando repetido, no se ejecutara una nueva accion\n", 'c');
         respuesta = "Comando repetido";
         return;
     }
-    ultimoComandoRecibido = comandoRecibido; 
+    ultimoComandoRecibido = comandoRecibido;
+    
+    int primerSep = comandoRecibido.indexOf('@');
+    int segundoSep = comandoRecibido.indexOf('@', primerSep + 1);
+    int tercerSep = comandoRecibido.indexOf('@', segundoSep + 1);
+
+    if (primerSep == -1 || segundoSep == -1 || tercerSep == -1 ||
+        primerSep == 0 || segundoSep == primerSep + 1 || tercerSep == segundoSep + 1) {
+        respuesta = "ERR: Formato de comando invalido. Usa: ID@R@CMD@##";
+        imprimirSerial(respuesta, 'r');
+        return;
+    }
+
+    String comandoDestinoID = comandoRecibido.substring(0, primerSep); 
+    char red = comandoRecibido.charAt(primerSep + 1);
+    String comandoProcesar = comandoRecibido.substring(segundoSep + 1, tercerSep); 
+    String valorAleatorio = comandoRecibido.substring(tercerSep + 1); 
+
+    String prefix1 = "";
+    String accion = "";
+
     imprimirSerial("\nComando recibido en procesado de comando: " + comandoRecibido);
-    imprimirSerial("\nComando a Procesar -> " + comandoProcesar);
+    imprimirSerial("ID de Destino del Comando -> " + comandoDestinoID);
+    imprimirSerial("Red -> " + String(red));
+    imprimirSerial("Comando a Procesar -> " + comandoProcesar);
+    imprimirSerial("Valor Aleatorio -> " + valorAleatorio);
 
     if (comandoProcesar.startsWith("SETPIN:") || comandoProcesar.startsWith("CLRPIN:") || comandoProcesar.startsWith("GETPIN:")) {
         String pinName = comandoProcesar.substring(comandoProcesar.indexOf(':') + 1);
@@ -237,7 +391,7 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
         else if (pinName == "IO6") pin = PIN_IO6;
 
         if (pin == -1) {
-            respuesta = "Pin no reconocido";
+            respuesta = "Pin no reconocido: " + pinName;
             imprimirSerial(respuesta, 'r');
             return;
         }
@@ -255,149 +409,195 @@ void ManejoComunicacion::procesarComando(const String &comandoRecibido, String &
             imprimirSerial(respuesta, 'y');
             return;
         } else if (comandoProcesar.startsWith("GETPIN:")) {
-            pinMode(pin, INPUT); // Si el pin es salida, puedes omitir esto
+            pinMode(pin, INPUT); 
             int estado = digitalRead(pin);
             respuesta = "Pin " + pinName + " estado: " + String(estado ? "HABILITADO (HIGH)" : "DESHABILITADO (LOW)");
             imprimirSerial(respuesta, 'c');
             return;
         }
     }
-    // --- FIN NUEVA SECCIÓN ---
 
-    if (IDLora == String(configLora.IDLora) && destino == "L") {
-        if (comandoProcesar.startsWith("ID")) {
-            accion = comandoProcesar.substring(2, 3);
-            if (accion == "L") {
-                respuesta = "ID del nodo: " + String(configLora.IDLora);
-                imprimirSerial("El ID del nodo es -> " + String(configLora.IDLora), 'y');
-            } else if (accion == "C") {
-                prefix1 = comandoProcesar.substring(4, 7);
-                imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
-                strncpy(configLora.IDLora, prefix1.c_str(), sizeof(configLora.IDLora) - 1);
-                configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0'; 
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                respuesta = "ID cambiado a: " + prefix1;
-            }
-        } else if (comandoProcesar.startsWith("CH")) {
-            accion = comandoProcesar.substring(2, 3);
-            if (accion == "L") {
-                respuesta = "Canal actual: " + String(configLora.Canal);
-                imprimirSerial("El canal del nodo es -> " + String(configLora.Canal), 'y');
-            } else if (accion == "C") {
-                int idxMayor = comandoProcesar.indexOf('>');
-                if (idxMayor != -1 && idxMayor + 1 < comandoProcesar.length()) {
-                    prefix1 = comandoProcesar.substring(idxMayor + 1); 
-                    imprimirSerial("Cambiando el canal del nodo a -> " + prefix1, 'c');
-                    configLora.Canal = prefix1.toInt();
-                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                    lora.begin(canales[configLora.Canal]);
-                    respuesta = "Canal cambiado a: " + prefix1;
-                    esp_restart();
-                } else {
-                    imprimirSerial("Formato de comando de canal inválido", 'r');
-                    respuesta = "Formato de comando de canal inválido";
+    if (strcmp(comandoDestinoID.c_str(), configLora.IDLora) == 0 || strcmp(comandoDestinoID.c_str(), "000") == 0) {
+        imprimirSerial("Comando dirigido a este nodo (" + String(configLora.IDLora) + ") o es broadcast (000).", 'g');
+
+        if (red == 'L') { 
+            if (comandoProcesar.startsWith("ID")) {
+                accion = comandoProcesar.substring(2, 3);
+                if (accion == "L") {
+                    respuesta = "ID del nodo: " + String(configLora.IDLora);
+                    imprimirSerial("El ID del nodo es -> " + String(configLora.IDLora), 'y');
+                } else if (accion == "C") {
+                    if (comandoProcesar.length() >= 7) { 
+                        prefix1 = comandoProcesar.substring(4, 7); 
+                        imprimirSerial("Cambiando el ID del nodo a -> " + prefix1, 'c');
+                        strncpy(configLora.IDLora, prefix1.c_str(), sizeof(configLora.IDLora) - 1);
+                        configLora.IDLora[sizeof(configLora.IDLora) - 1] = '\0';
+                        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                        respuesta = "ID cambiado a: " + prefix1;
+                    } else {
+                        imprimirSerial("Formato de comando ID inválido para cambio. Esperado: IDC:XXX", 'r');
+                        respuesta = "Formato ID invalido";
+                    }
                 }
-            }
-        } else if (comandoProcesar.startsWith("SCR")) {
-            accion = comandoProcesar.substring(4, 5);
-            if (accion == "L") {
-                respuesta = "Pantalla " + String(configLora.Pantalla ? "activada" : "desactivada");
-                String mensaje = "La pantalla de la LoRa se encuentra ";
-                mensaje += configLora.Pantalla ? "Activada" : "Desactivada";
-                imprimirSerial(mensaje);
-            } else if (accion == "0") {
-                imprimirSerial("Desactivando la pantalla");
-                deshabilitarPantalla();
-                respuesta = "Pantalla deshabilitada";
-            } else if (accion == "1") {
-                imprimirSerial("Activando la pantalla");
-                habilitarPantalla();
-                respuesta = "Pantalla habilitada";
-            }
-        } else if (comandoProcesar.startsWith("I2C")) {
-            accion = comandoProcesar.substring(4, 5);
-            if (accion == "L") {
-                respuesta = "I2C " + String(configLora.I2C ? "activada" : "desactivada");
-                String mensaje = "La comunicacion I2C se encuentra ";
-                mensaje += configLora.I2C ? "Activada" : "Desactivada";
-                imprimirSerial(mensaje);
-            } else if (accion == "0") {
-                imprimirSerial("Desactivando la comunicacion I2C", 'y');
-                configLora.I2C = false;
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                respuesta = "I2C desactivada";
-            } else if (accion == "1") {
-                imprimirSerial("Activando la comunicacion I2C");
-                configLora.I2C = true;
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                ManejoComunicacion::initI2C();
-                respuesta = "I2C activada";
-            }
-        } else if (comandoProcesar.startsWith("SCANI2C")) {
-            if (configLora.I2C) {
-                imprimirSerial("Escaneando el puerto I2C en busca de dispositivos...", 'y');
-                int encontrados = ManejoComunicacion::scannerI2C();
-                imprimirSerial("Se encontraron " + String(encontrados) + " direcciones I2C");
-                respuesta = "Se encontraron " + String(encontrados) + " direcciones I2C";
+            } else if (comandoProcesar.startsWith("CH")) {
+                accion = comandoProcesar.substring(2, 3);
+                if (accion == "L") {
+                    respuesta = "Canal actual: " + String(configLora.Canal);
+                    imprimirSerial("El canal del nodo es -> " + String(configLora.Canal), 'y');
+                } else if (accion == "C") {
+                    int idxMayor = comandoProcesar.indexOf('>');
+                    if (idxMayor != -1 && idxMayor + 1 < comandoProcesar.length()) {
+                        prefix1 = comandoProcesar.substring(idxMayor + 1);
+                        imprimirSerial("Cambiando el canal del nodo a -> " + prefix1, 'c');
+                        configLora.Canal = prefix1.toInt();
+                        if (configLora.Canal >= 0 && configLora.Canal < (sizeof(canales) / sizeof(canales[0]))) { 
+                            ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                            lora.begin(canales[configLora.Canal]); 
+                            respuesta = "Canal cambiado a: " + prefix1;
+                            esp_restart(); 
+                        } else {
+                            respuesta = "Canal fuera de rango";
+                            imprimirSerial("Canal especificado fuera de rango: " + prefix1, 'r');
+                        }
+                    } else {
+                        imprimirSerial("Formato de comando de canal inválido", 'r');
+                        respuesta = "Formato de comando de canal inválido";
+                    }
+                }
+            } else if (comandoProcesar.startsWith("SCR")) {
+                accion = comandoProcesar.substring(4, 5);
+                if (accion == "L") {
+                    respuesta = "Pantalla " + String(configLora.displayOn ? "activada" : "desactivada");
+                    String mensaje = "La pantalla de la LoRa se encuentra ";
+                    mensaje += configLora.displayOn ? "Activada" : "Desactivada";
+                    imprimirSerial(mensaje);
+                } else if (accion == "0") {
+                    imprimirSerial("Desactivando la pantalla");
+                    configurarDisplay(false); 
+                    respuesta = "Pantalla deshabilitada";
+                } else if (accion == "1") {
+                    imprimirSerial("Activando la pantalla");
+                    configurarDisplay(true);
+                    respuesta = "Pantalla habilitada";
+                }
+            } else if (comandoProcesar.startsWith("I2C")) {
+                accion = comandoProcesar.substring(4, 5);
+                if (accion == "L") {
+                    respuesta = "I2C " + String(configLora.I2C ? "activada" : "desactivada");
+                    String mensaje = "La comunicacion I2C se encuentra ";
+                    mensaje += configLora.I2C ? "Activada" : "Desactivada";
+                    imprimirSerial(mensaje);
+                } else if (accion == "0") {
+                    imprimirSerial("Desactivando la comunicacion I2C", 'y');
+                    configLora.I2C = false;
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    respuesta = "I2C desactivada";
+                } else if (accion == "1") {
+                    imprimirSerial("Activando la comunicacion I2C");
+                    configLora.I2C = true;
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    ManejoComunicacion::initI2C(); 
+                    respuesta = "I2C activada";
+                }
+            } else if (comandoProcesar.startsWith("SCANI2C")) {
+                if (configLora.I2C) {
+                    imprimirSerial("Escaneando el puerto I2C en busca de dispositivos...", 'y');
+                    int encontrados = ManejoComunicacion::scannerI2C();
+                    imprimirSerial("Se encontraron " + String(encontrados) + " direcciones I2C");
+                    respuesta = "Se encontraron " + String(encontrados) + " direcciones I2C";
+                } else {
+                    imprimirSerial("La comunicacion I2C esta desactivada, no se puede escanear", 'r');
+                    respuesta = "I2C desactivada, no se puede escanear";
+                }
+            } else if (comandoProcesar.startsWith("UART")) {
+                accion = comandoProcesar.substring(5, 6);
+                if (accion == "L") {
+                    respuesta = "UART " + String(configLora.UART ? "activada" : "desactivada");
+                    String mensaje = "La comunicacion UART se encuentra ";
+                    mensaje += configLora.UART ? "Activada" : "Desactivada";
+                    imprimirSerial(mensaje);
+                } else if (accion == "0") {
+                    imprimirSerial("Desactivando la comunicacion UART");
+                    configLora.UART = false;
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    respuesta = "UART desactivada";
+                } else if (accion == "1") {
+                    imprimirSerial("Activando la comunicacion UART");
+                    configLora.UART = true;
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    ManejoComunicacion::initUART(); 
+                    respuesta = "UART activada";
+                }
+            } else if (comandoProcesar.startsWith("WIFI")) {
+                accion = comandoProcesar.substring(5, 6);
+                if (accion == "L") {
+                    respuesta = "WiFi " + String(configLora.WiFi ? "activada" : "desactivada");
+                    String mensaje = "La conexion WiFi se encuentra ";
+                    mensaje += configLora.WiFi ? "Activada" : "Desactivada";
+                    imprimirSerial(mensaje);
+                } else if (accion == "0") {
+                    imprimirSerial("Desactivando la comunicacion WiFi");
+                    configLora.WiFi = false;
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    respuesta = "WiFi desactivada";
+                } else if (accion == "1") {
+                    imprimirSerial("Activando la comunicacion WiFi");
+                    configLora.WiFi = true;
+                    ManejoEEPROM::guardarTarjetaConfigEEPROM();
+                    respuesta = "WiFi activada";
+                }
+            } else if (comandoProcesar.startsWith("RESET")) {
+                imprimirSerial("Reiniciando la tarjeta LoRa...");
+                respuesta = "Reiniciando la tarjeta LoRa...";
+                delay(1000);
+                ManejoEEPROM::borrarTarjetaConfigEEPROM(); 
+                esp_restart();
+            } else if (comandoProcesar.startsWith("MPROG")) {
+                imprimirSerial("Entrando a modo programacion a traves de comando...");
+                if (!modoProgramacion) { 
+                    Interfaz::entrarModoProgramacion(); 
+                }
+                respuesta = "Entrando a modo programación";
             } else {
-                imprimirSerial("La comunicacion I2C esta desactivada, no se puede escanear", 'r');
-                respuesta = "I2C desactivada, no se puede escanear";
+                respuesta = "ERR: Comando LoRa desconocido";
+                imprimirSerial("Comando LoRa desconocido: " + comandoProcesar, 'r');
             }
-        } else if (comandoProcesar.startsWith("UART")) {
-            accion = comandoProcesar.substring(5, 6);
-            if (accion == "L") {
-                respuesta = "UART " + String(configLora.UART ? "activada" : "desactivada");
-                String mensaje = "La comunicacion UART se encuentra ";
-                mensaje += configLora.UART ? "Activada" : "Desactivada";
-                imprimirSerial(mensaje);
-            } else if (accion == "0") {
-                imprimirSerial("Desactivando la comunicacion UART");
-                configLora.UART = false;
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                respuesta = "UART desactivada";
-            } else if (accion == "1") {
-                imprimirSerial("Activando la comunicacion UART");
-                configLora.UART = true;
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                ManejoComunicacion::initUART();
-                respuesta = "UART activada";
-            }
-        } else if (comandoProcesar.startsWith("WIFI")) {
-            accion = comandoProcesar.substring(5, 6);
-            if (accion == "L") {
-                respuesta = "WiFi " + String(configLora.WiFi ? "activada" : "desactivada");
-                String mensaje = "La conexion WiFi se encuentra ";
-                mensaje += configLora.WiFi ? "Activada" : "Desactivada";
-                imprimirSerial(mensaje);
-            } else if (accion == "0") {
-                imprimirSerial("Desactivando la comunicacion WiFi");
-                configLora.WiFi = false;
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                respuesta = "WiFi desactivada";
-            } else if (accion == "1") {
-                imprimirSerial("Activando la comunicacion WiFi");
-                configLora.WiFi = true;
-                ManejoEEPROM::guardarTarjetaConfigEEPROM();
-                respuesta = "WiFi activada";
-            }
-        } else if (comandoProcesar.startsWith("RESET")) {
-            imprimirSerial("Reiniciando la tarjeta LoRa...");
-            respuesta = "Reiniciando la tarjeta LoRa...";
-            delay(1000);
-            ManejoEEPROM::borrarTarjetaConfigEEPROM();
-        } else if (comandoProcesar.startsWith("MPROG")) {
-            imprimirSerial("Entrando a modo programacion a traves de comando...");
-            if (!modoProgramacion) {
-                Interfaz::entrarModoProgramacion();
-            }
-            respuesta = "Entrando a modo programación";
+        } else if (red == 'V') {
+            imprimirSerial("Comando para red Vecinal (UART).", 'g');
+            ManejoComunicacion::escribirVecinal(comandoRecibido); 
+            respuesta = "Comando enviado a vecinal";
+        } else {
+            respuesta = "ERR: Red desconocida";
+            imprimirSerial("Red desconocida: " + String(red), 'r');
         }
-    } else if (IDLora == String(configLora.IDLora) && destino == "V") {
-        ManejoComunicacion::escribirVecinal(comandoRecibido);
-        respuesta = "Comando enviado a vecinal";
     } else {
-        imprimirSerial("Reenviando comando al nodo con el ID " + IDLora);
-        ManejoComunicacion::envioMsjLoRa(IDLora);
-        respuesta = "Reenviando comando al nodo con el ID " + IDLora;
+        imprimirSerial("Comando ignorado, no es para este ID (" + String(configLora.IDLora) + ") ni para 000. Destino recibido: " + comandoDestinoID, 'y');
+        respuesta = "IGNORADO: " + comandoDestinoID;
+    }
+}
+
+// Callback para desactivar el pin cuando el timer termina
+//Comando para acitivar ACTIVAR:IO2,5s y para desactivar DESACTIVAR:IO2,10s
+void desactivarPinCallback(TimerHandle_t xTimer) {
+    for (int i = 0; i < 2; ++i) {
+        if (activaciones[i].timer == xTimer) {
+            digitalWrite(activaciones[i].pin, LOW);
+            activaciones[i].activo = false;
+            activaciones[i].tiempoDesactivacion = 0;
+            imprimirSerial("Pin IO" + String(i+2) + " desactivado automáticamente por timer.", 'y');
+            break;
+        }
+    }
+}
+
+void activarPinCallback(TimerHandle_t xTimer) {
+    for (int i = 0; i < 2; ++i) {
+        if (activaciones[i].timer == xTimer) {
+            digitalWrite(activaciones[i].pin, HIGH);
+            activaciones[i].activo = true;
+            activaciones[i].tiempoDesactivacion = 0;
+            imprimirSerial("Pin IO" + String(i+2) + " activado automáticamente tras desactivación temporizada.", 'g');
+            break;
+        }
     }
 }

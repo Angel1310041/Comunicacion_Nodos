@@ -1,18 +1,11 @@
 #include <Arduino.h>
 #include "eeprom.h"
-#include <ArduinoJson.h>
-#include <Preferences.h>
-#define WIFI_NAMESPACE "WIFI_NETS"
-#define WIFI_MAX 3
 
-
-extern LoRaConfig configLora;
-extern Network redes[3];
 
 Preferences eeprom;
 const int EEPROM_SIZE = 512;
 const int DIRECCION_INICIO_CONFIG = 0;
-
+Network redes[3];
 
 void ManejoEEPROM::leerTarjetaEEPROM() {
   eeprom.begin("EEPROM_PPAL", false);
@@ -97,72 +90,156 @@ void ManejoEEPROM::tarjetaNueva() {
   }
 }
 
+//Guarda una red WiFi (ssid y password) en un slot disponible (hay máximo 3). Si todos los slots están ocupados, reemplaza el primero.
 bool ManejoEEPROM::guardarWiFiCredenciales(const char* ssid, const char* password) {
-    Preferences prefs;
-    prefs.begin(WIFI_NAMESPACE, false);
-
-    // Buscar si ya existe la red o el primer slot vacío
-    int idx = -1;
-    for (int i = 0; i < WIFI_MAX; ++i) {
-        String key = "ssid_" + String(i);
-        String storedSsid = prefs.getString(key.c_str(), "");
-        if (storedSsid == ssid) {
-            idx = i;
+    // Buscar un slot vacío o reemplazar el más antiguo
+    int emptySlot = -1;
+    for (int i = 0; i < 3; i++) {
+        if (strlen(redes[i].ssid) == 0) {
+            emptySlot = i;
             break;
         }
-        if (idx == -1 && storedSsid.length() == 0) {
-            idx = i; // Primer slot vacío
-        }
     }
-
-    if (idx == -1) {
-        prefs.end();
-        return false; // No hay espacio
-    }
-
-    String ssidKey = "ssid_" + String(idx);
-    String passKey = "pass_" + String(idx);
-    prefs.putString(ssidKey.c_str(), ssid);
-    prefs.putString(passKey.c_str(), password);
-
-    prefs.end();
+    
+    // Si no hay slots vacíos, reemplazar el primero
+    if (emptySlot == -1) emptySlot = 0;
+    
+    // Guardar las credenciales
+    strncpy(redes[emptySlot].ssid, ssid, sizeof(redes[emptySlot].ssid));
+    strncpy(redes[emptySlot].password, password, sizeof(redes[emptySlot].password));
+    
+    // Guardar en EEPROM
+    guardarRedesEEPROM();
+    
+    imprimirSerial(String("Red guardada en slot ") + emptySlot + ": " + ssid, 'g');
     return true;
 }
 
+//Llena un arreglo JSON (JsonArray) con las redes WiFi guardadas (solo sus SSID).
 void ManejoEEPROM::obtenerRedesGuardadas(JsonArray& redesJson) {
-    Preferences prefs;
-    prefs.begin(WIFI_NAMESPACE, true);
-
-    for (int i = 0; i < WIFI_MAX; ++i) {
-        String ssidKey = "ssid_" + String(i);
-        String ssid = prefs.getString(ssidKey.c_str(), "");
-        if (ssid.length() > 0) {
+    for (int i = 0; i < 3; ++i) {
+        if (strlen(redes[i].ssid) > 0) {
             JsonObject red = redesJson.createNestedObject();
-            red["ssid"] = ssid;
-            // Por seguridad, no se retorna el password
+            red["ssid"] = redes[i].ssid;
         }
     }
+}
 
+//Elimina una red WiFi guardada con el SSID especificado
+bool ManejoEEPROM::eliminarRedWiFi(const char* ssid) {
+    for (int i = 0; i < 3; ++i) {
+        if (strcmp(redes[i].ssid, ssid) == 0) {
+            memset(&redes[i], 0, sizeof(Network));
+            guardarRedesEEPROM();
+            return true;
+        }
+    }
+    return false;
+}
+
+//Guarda todas las redes actualmente almacenadas en el arreglo redes[] a la EEPROM 
+void ManejoEEPROM::guardarRedesEEPROM() {
+    Preferences prefs;
+    prefs.begin("WIFI_NETS", false);
+    
+    for (int i = 0; i < 3; i++) {
+        String ssidKey = "ssid_" + String(i);
+        String passKey = "pass_" + String(i);
+        String favKey = "fav_" + String(i);
+        
+        if (strlen(redes[i].ssid) > 0) {
+            prefs.putString(ssidKey.c_str(), redes[i].ssid);
+            prefs.putString(passKey.c_str(), redes[i].password);
+            prefs.putBool(favKey.c_str(), redes[i].isFavorite);
+        } else {
+            prefs.remove(ssidKey.c_str());
+            prefs.remove(passKey.c_str());
+            prefs.remove(favKey.c_str());
+        }
+    }
+    
     prefs.end();
 }
 
-bool ManejoEEPROM::eliminarRedWiFi(const char* ssid) {
-    Preferences prefs;
-    prefs.begin(WIFI_NAMESPACE, false);
-
-    bool found = false;
-    for (int i = 0; i < WIFI_MAX; ++i) {
+//cargar las redes desde EEPROM y guardarlas en el arreglo redes[] al iniciar el programa
+void ManejoEEPROM::cargarRedesEEPROM() {
+  Preferences prefs;
+    prefs.begin("WIFI_NETS", true);
+    
+    for (int i = 0; i < 3; i++) {
         String ssidKey = "ssid_" + String(i);
         String passKey = "pass_" + String(i);
-        String storedSsid = prefs.getString(ssidKey.c_str(), "");
-        if (storedSsid == ssid) {
-            prefs.remove(ssidKey.c_str());
-            prefs.remove(passKey.c_str());
-            found = true;
-            break;
+        String favKey = "fav_" + String(i);
+        
+        if (prefs.isKey(ssidKey.c_str())) {
+            String ssid = prefs.getString(ssidKey.c_str(), "");
+            String password = prefs.getString(passKey.c_str(), "");
+            bool isFavorite = prefs.getBool(favKey.c_str(), false);
+            
+            if (ssid.length() > 0) {
+                strncpy(redes[i].ssid, ssid.c_str(), sizeof(redes[i].ssid));
+                strncpy(redes[i].password, password.c_str(), sizeof(redes[i].password));
+                redes[i].isFavorite = isFavorite;
+            }
         }
     }
-
+    
     prefs.end();
-    return found;
+}
+
+// Nueva función para marcar red favorita
+bool ManejoEEPROM::guardarRedFavorita(const char* ssid) {
+    Preferences prefs;
+    prefs.begin("WIFI_NETS", false);
+    
+    // Primero desmarcar cualquier favorita existente
+    for(int i = 0; i < 3; i++) {
+        String favKey = "fav_" + String(i);
+        prefs.putBool(favKey.c_str(), false);
+        redes[i].isFavorite = false;
+    }
+    
+    // Buscar y marcar la nueva favorita
+    for(int i = 0; i < 3; i++) {
+        String keySSID = "ssid_" + String(i);
+        if(prefs.getString(keySSID.c_str(), "") == String(ssid)) {
+            String favKey = "fav_" + String(i);
+            prefs.putBool(favKey.c_str(), true);
+            redes[i].isFavorite = true;
+            prefs.end();
+            return true;
+        }
+    }
+    
+    prefs.end();
+    return false;
+}//función para conectar a la red favorita al iniciar
+bool ManejoEEPROM::conectarRedFavorita() {
+    cargarRedesEEPROM(); // Asegurarse de tener las redes actualizadas
+    
+    for(int i = 0; i < 3; i++) {
+        if(redes[i].isFavorite && strlen(redes[i].ssid) > 0) {
+            imprimirSerial(String("Conectando a red favorita: ") + redes[i].ssid, 'g');
+            
+            WiFi.begin(redes[i].ssid, redes[i].password);
+            
+            unsigned long startTime = millis();
+            while(WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
+                delay(500);
+                imprimirSerial(".", 'y');
+            }
+            
+            if(WiFi.status() == WL_CONNECTED) {
+                imprimirSerial("\nConectado a red favorita!", 'g');
+                imprimirSerial("IP: " + WiFi.localIP().toString(), 'g');
+                return true;
+            } else {
+                imprimirSerial("\nError al conectar a red favorita", 'r');
+                return false;
+            }
+        }
+    }
+    
+    imprimirSerial("No hay red favorita configurada", 'y');
+    return false;
 }

@@ -2,6 +2,20 @@
   #define COMUNICACION_H
   #include "config.h"
 
+
+  
+struct Activacion {
+    int pin;                   // Pin a controlar (IO2 o IO3)
+    int tiempoDesactivacion;   // Tiempo en milisegundos
+    bool activo;               // Estado actual
+    TimerHandle_t timer;       // Timer asociado
+};
+
+static Activacion activaciones[2] = {
+    {PIN_IO2, 0, false, NULL},
+    {PIN_IO3, 0, false, NULL}
+};
+
   class ManejoComunicacion {
     public:
       static void initRFReceiver();

@@ -1,6 +1,9 @@
 #ifndef EEPROM_H
   #define EEPROM_H
   #include "config.h"
+  #include <WiFi.h> 
+  
+  
 
 struct LoRaConfig {
   uint32_t magic;
@@ -21,6 +24,7 @@ extern LoRaConfig configLora;
   struct Network {
     char ssid[32];
     char password[32];
+    bool isFavorite; 
   };
 
   extern Network redes[3];
@@ -41,10 +45,16 @@ extern LoRaConfig configLora;
 
       void guardarCondicionalJSON(const String& formula);
 
-      //Funciones para credenciales de wifi
+
+    //Funciones para credenciales de wifi
     static bool guardarWiFiCredenciales(const char* ssid, const char* password);
     static void obtenerRedesGuardadas(JsonArray& redes);
     static bool eliminarRedWiFi(const char* ssid);
+    static void guardarRedesEEPROM();
+    static void cargarRedesEEPROM();
+    static bool guardarRedFavorita(const char* ssid);
+    static bool conectarRedFavorita();
+    
   };
 
 

@@ -104,14 +104,26 @@ void mostrarInfo(const String& mensajeInfo) {
   }
 }
 
+//Modificado
 void configurarDisplay(bool habilitar) {
-  displayActivo = habilitar;
-  configLora.displayOn = habilitar; // Update the config
-  if (habilitar) {
-    Heltec.display->displayOn(); // Turn on the display
-    mostrarInfo("Display HABILITADO.");
-  } else {
-    Heltec.display->displayOff(); // Turn off the display
-    Serial.println("Display DESHABILITADO.");
-  }
+    static bool lastState = configLora.displayOn;
+    
+    if (habilitar != lastState) {
+        configLora.displayOn = habilitar;
+        displayActivo = habilitar;
+        
+        // Mostrar estado en serial
+        imprimirSerial("Configuracion guardada:", 'g');
+        imprimirSerial("Pantalla: " + String(habilitar ? "1" : "0"), 'g');
+        
+        if (habilitar) {
+            Heltec.display->displayOn();
+            mostrarEstadoLoRa(String(configLora.IDLora), String(configLora.Canal), VERSION_FIRMWARE);
+        } else {
+            Heltec.display->displayOff();
+        }
+        
+        ManejoEEPROM::guardarTarjetaConfigEEPROM();
+        lastState = habilitar;
+    }
 }
